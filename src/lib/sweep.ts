@@ -1,30 +1,29 @@
 import { formatUnitsCapped } from './format-balance';
 import {
-  decodeErrorResult,
   encodeFunctionData,
-  encodePacked,
   getAddress,
   type Address,
   type Hex,
 } from 'viem';
-import { erc20Abi, permit2Abi, quoterV2Abi, swapRouterAbi } from './abis';
+import { erc20Abi, permit2Abi, swapRouterAbi } from './abis';
+import { isPermit2Allowlisted } from './allowlist';
 import {
-  FEE_TIERS,
   MAX_TOKENS_PER_SWEEP,
   MIN_WLD_OUT_WEI,
   PERMIT2_ADDRESS,
   PLATFORM_FEE_BPS,
   PLATFORM_FEE_WALLET,
   SLIPPAGE_BPS,
-  UNISWAP_V3_QUOTER_V2,
   UNISWAP_V3_SWAP_ROUTER,
-  USDC_ADDRESS,
-  WETH_ADDRESS,
   WLD_ADDRESS,
 } from './constants';
-import { isPermit2Allowlisted } from './allowlist';
-import { publicClient } from './tokens';
-import { isStakedYieldToken } from './token-filters';
+import { isForageableToken } from './token-filters';
+import {
+  applySlippage,
+  encodeV3Path,
+  quoteRouteToWld,
+  type RouteQuote,
+} from './swap-quotes';
 import type { BuildSweepResponse, SweepQuote, WalletToken } from './types';
 
 const MAX_UINT160 = (BigInt(1) << BigInt(160)) - BigInt(1);
@@ -42,207 +41,6 @@ function asCalldataTx(to: Address, data: Hex) {
     data,
     value: '0x0' as const,
   };
-}
-
-type RouteHop = {
-  tokenIn: Address;
-  tokenOut: Address;
-  fee: number;
-};
-
-type RouteQuote = {
-  hops: RouteHop[];
-  amountOut: bigint;
-  label: string;
-};
-
-const quoterSingleErrorAbi = [
-  {
-    type: 'error',
-    name: 'QuoteExactInputSingle',
-    inputs: [
-      { name: 'amountOut', type: 'uint256' },
-      { name: 'sqrtPriceX96After', type: 'uint160' },
-      { name: 'initializedTicksCrossed', type: 'uint32' },
-      { name: 'gasEstimate', type: 'uint256' },
-    ],
-  },
-] as const;
-
-function applySlippage(amount: bigint, slippageBps: number): bigint {
-  return (amount * BigInt(10_000 - slippageBps)) / BigInt(10_000);
-}
-
-function encodeV3Path(hops: RouteHop[]): Hex {
-  if (hops.length === 0) {
-    throw new Error('Route must include at least one hop');
-  }
-
-  const parts: Array<'address' | 'uint24'> = ['address'];
-  const values: Array<Address | number> = [hops[0].tokenIn];
-
-  for (const hop of hops) {
-    parts.push('uint24', 'address');
-    values.push(hop.fee, hop.tokenOut);
-  }
-
-  return encodePacked(parts, values);
-}
-
-function extractRevertData(error: unknown): Hex | null {
-  if (!error || typeof error !== 'object') {
-    return null;
-  }
-
-  const candidate = error as {
-    data?: Hex;
-    cause?: { data?: Hex };
-    walk?: () => Iterable<{ data?: Hex }>;
-  };
-
-  if (candidate.data) {
-    return candidate.data;
-  }
-
-  if (candidate.cause?.data) {
-    return candidate.cause.data;
-  }
-
-  if (typeof candidate.walk === 'function') {
-    try {
-      const walked = candidate.walk();
-      if (walked && typeof walked[Symbol.iterator] === 'function') {
-        for (const nested of walked) {
-          if (nested?.data) {
-            return nested.data;
-          }
-        }
-      }
-    } catch {
-      return null;
-    }
-  }
-
-  return null;
-}
-
-async function quoteExactInputSingle(
-  tokenIn: Address,
-  tokenOut: Address,
-  amountIn: bigint,
-  fee: number,
-): Promise<bigint | null> {
-  try {
-    const result = await publicClient.simulateContract({
-      address: UNISWAP_V3_QUOTER_V2,
-      abi: quoterV2Abi,
-      functionName: 'quoteExactInputSingle',
-      args: [
-        {
-          tokenIn,
-          tokenOut,
-          amountIn,
-          fee,
-          sqrtPriceLimitX96: BigInt(0),
-        },
-      ],
-    });
-
-    return result.result[0];
-  } catch (error) {
-    const data = extractRevertData(error);
-    if (!data) {
-      return null;
-    }
-
-    try {
-      const decoded = decodeErrorResult({
-        abi: quoterSingleErrorAbi,
-        data,
-      });
-      return decoded.args[0] > BigInt(0) ? decoded.args[0] : null;
-    } catch {
-      return null;
-    }
-  }
-}
-
-async function quoteHop(
-  tokenIn: Address,
-  tokenOut: Address,
-  amountIn: bigint,
-): Promise<{ fee: number; amountOut: bigint } | null> {
-  for (const fee of FEE_TIERS) {
-    const amountOut = await quoteExactInputSingle(tokenIn, tokenOut, amountIn, fee);
-    if (amountOut) {
-      return { fee, amountOut };
-    }
-  }
-
-  return null;
-}
-
-async function quoteRouteToWld(
-  token: WalletToken,
-): Promise<RouteQuote | null> {
-  const tokenIn = getAddress(token.address) as Address;
-  const amountIn = BigInt(token.balance);
-
-  if (amountIn <= BigInt(0)) {
-    return null;
-  }
-
-  const acceptQuote = (route: RouteQuote): RouteQuote | null =>
-    route.amountOut >= MIN_WLD_OUT_WEI ? route : null;
-
-  for (const fee of FEE_TIERS) {
-    const amountOut = await quoteExactInputSingle(
-      tokenIn,
-      WLD_ADDRESS,
-      amountIn,
-      fee,
-    );
-
-    if (amountOut) {
-      return acceptQuote({
-        hops: [{ tokenIn, tokenOut: WLD_ADDRESS, fee }],
-        amountOut,
-        label: `${token.symbol} → WLD`,
-      });
-    }
-  }
-
-  for (const [intermediate, label] of [
-    [WETH_ADDRESS, 'WETH'] as const,
-    [USDC_ADDRESS, 'USDC'] as const,
-  ]) {
-    const firstHop = await quoteHop(tokenIn, intermediate, amountIn);
-    if (!firstHop) {
-      continue;
-    }
-
-    for (const secondFee of FEE_TIERS) {
-      const amountOut = await quoteExactInputSingle(
-        intermediate,
-        WLD_ADDRESS,
-        firstHop.amountOut,
-        secondFee,
-      );
-
-      if (amountOut) {
-        return acceptQuote({
-          hops: [
-            { tokenIn, tokenOut: intermediate, fee: firstHop.fee },
-            { tokenIn: intermediate, tokenOut: WLD_ADDRESS, fee: secondFee },
-          ],
-          amountOut,
-          label: `${token.symbol} → ${label} → WLD`,
-        });
-      }
-    }
-  }
-
-  return null;
 }
 
 function buildSwapTransaction({
@@ -310,17 +108,6 @@ function buildPermit2Approval(token: Address, amount: bigint) {
   );
 }
 
-function buildErc20ApprovePermit2(token: Address, amount: bigint) {
-  return asCalldataTx(
-    token,
-    encodeFunctionData({
-      abi: erc20Abi,
-      functionName: 'approve',
-      args: [PERMIT2_ADDRESS, amount],
-    }),
-  );
-}
-
 export async function buildSweepPlan({
   walletAddress,
   tokens,
@@ -334,7 +121,7 @@ export async function buildSweepPlan({
     );
   }
 
-  const selected = tokens.slice(0, MAX_TOKENS_PER_SWEEP);
+  const candidates = tokens.filter((token) => isForageableToken(token));
   const deadline = BigInt(Math.floor(Date.now() / 1000) + 60 * 10);
   const recipient = getAddress(walletAddress);
   const feeWallet = getAddress(PLATFORM_FEE_WALLET);
@@ -344,14 +131,9 @@ export async function buildSweepPlan({
   const transactions: BuildSweepResponse['transactions'] = [];
   let estimatedWldTotal = BigInt(0);
 
-  for (const token of selected) {
-    if (isStakedYieldToken(token.symbol, token.name)) {
-      skippedTokens.push({
-        address: token.address,
-        symbol: token.symbol,
-        reason: 'Staked yield token (Re prefix)',
-      });
-      continue;
+  for (const token of candidates) {
+    if (quotes.length >= MAX_TOKENS_PER_SWEEP) {
+      break;
     }
 
     if (!isPermit2Allowlisted(token.address)) {
@@ -399,7 +181,6 @@ export async function buildSweepPlan({
     });
 
     transactions.push(
-      buildErc20ApprovePermit2(getAddress(token.address), amountIn),
       buildPermit2Approval(getAddress(token.address), amountIn),
       buildSwapTransaction({
         route,

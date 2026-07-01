@@ -4,8 +4,8 @@ import {
   WLD_ADDRESS,
 } from './constants';
 
-/** Contract entrypoints allowlisted in the Developer Portal. */
-export const PORTAL_CONTRACTS = [
+/** Core contracts called directly (router, permit2, WLD fee transfer). */
+export const PORTAL_CORE_CONTRACTS = [
   UNISWAP_V3_SWAP_ROUTER,
   PERMIT2_ADDRESS,
   WLD_ADDRESS,
@@ -15,7 +15,7 @@ export const PORTAL_CONTRACTS = [
  * ERC-20 tokens allowlisted for Permit2 in the Developer Portal.
  * Synced from wallet scan — add new addresses when users hold new junk tokens.
  */
-export const PORTAL_PERMIT2_TOKENS = [
+export const PORTAL_PERMIT2_TOKEN_ADDRESSES = [
   '0x024598618e805381b0F6A1FA0B7AF6304e8C6426',
   '0x0e70782ECb84e9A82B74B2FD0b1C799C2E71849D',
   '0xC0467abFc0a98CeF1cC89C7Fa99043c3601698eA',
@@ -95,8 +95,20 @@ export const PORTAL_PERMIT2_TOKENS = [
   WLD_ADDRESS,
 ] as const;
 
+/** @deprecated Use PORTAL_PERMIT2_TOKEN_ADDRESSES */
+export const PORTAL_PERMIT2_TOKENS = PORTAL_PERMIT2_TOKEN_ADDRESSES;
+
+/**
+ * Contract entrypoints for Developer Portal — core infra plus every ERC-20
+ * we may call directly (e.g. WLD fee transfer).
+ */
+export const PORTAL_CONTRACTS = [
+  ...PORTAL_CORE_CONTRACTS,
+  ...PORTAL_PERMIT2_TOKEN_ADDRESSES,
+] as const;
+
 const permit2Set = new Set(
-  PORTAL_PERMIT2_TOKENS.map((address) => address.toLowerCase()),
+  PORTAL_PERMIT2_TOKEN_ADDRESSES.map((address) => address.toLowerCase()),
 );
 
 export function isPermit2Allowlisted(address: string): boolean {

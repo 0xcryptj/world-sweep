@@ -24,11 +24,11 @@ const ERROR_TITLES: Record<string, string> = {
 
 const ERROR_MESSAGES: Record<string, string> = {
   invalid_contract:
-    'World App blocked a token or contract that is not allowlisted in the Developer Portal. Tap Preview Forage — unlisted tokens are skipped automatically. New wallet tokens may need a few minutes to sync to the portal.',
+    'World App blocked a token or contract that is not allowlisted in the Developer Portal (Contract Entrypoints and Permit2 Tokens). After adding addresses, wait a few minutes, fully close and reopen the mini app, then try again.',
   invalid_token:
     'One or more tokens in this batch are not on the Permit2 allowlist. Preview again after rescanning — only allowlisted tokens with liquidity are included.',
   simulation_failed:
-    'World App could not simulate this batched swap. Staked Re tokens cannot be swapped — deselect them. Other causes: no liquidity, slippage too tight, or a token not allowlisted in the Developer Portal.',
+    'World App could not simulate this swap batch. Only tokens with a verified Uniswap route are included — try fewer selections or rescan. Staked Re tokens are always excluded.',
   user_rejected: 'You cancelled the transaction in World App.',
   transaction_failed:
     'The transaction was submitted but reverted on-chain. Try fewer tokens or preview the sweep first.',

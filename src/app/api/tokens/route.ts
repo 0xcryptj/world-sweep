@@ -1,5 +1,6 @@
+import { scanWalletForForage } from '@/lib/forage-scan';
+import { fetchAllWalletTokens } from '@/lib/tokens';
 import { NextResponse } from 'next/server';
-import { fetchWalletTokens } from '@/lib/tokens';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -13,8 +14,10 @@ export async function GET(request: Request) {
   }
 
   try {
-    const tokens = await fetchWalletTokens(address);
-    return NextResponse.json({ tokens });
+    const holdings = await fetchAllWalletTokens(address);
+    const { swappable, excluded } = await scanWalletForForage(holdings);
+
+    return NextResponse.json({ tokens: swappable, excluded });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : 'Failed to load tokens';

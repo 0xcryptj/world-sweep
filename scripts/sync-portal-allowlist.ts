@@ -1,3 +1,4 @@
+import { pathToFileURL } from 'node:url';
 import { getAddress } from 'viem';
 import { PORTAL_CONTRACTS, PORTAL_PERMIT2_TOKENS } from '../src/lib/allowlist';
 
@@ -14,4 +15,11 @@ export function getPortalAllowlistPayload() {
   };
 }
 
-console.log(JSON.stringify(getPortalAllowlistPayload(), null, 2));
+const isMain =
+  typeof process !== 'undefined' &&
+  Boolean(process.argv[1]) &&
+  import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (isMain) {
+  console.log(JSON.stringify(getPortalAllowlistPayload(), null, 2));
+}

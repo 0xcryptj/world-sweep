@@ -13,6 +13,8 @@ import {
 import { hapticImpact, hapticNotification, hapticSelection } from '@/lib/haptics';
 import { APP_TAGLINE } from '@/lib/branding';
 import { formatWld } from '@/lib/sweep';
+import { isForageableToken } from '@/lib/token-filters';
+import type { ScanExclusionReason } from '@/lib/forage-scan';
 import type { BuildSweepResponse, WalletToken } from '@/lib/types';
 import { LiveFeedback } from '@worldcoin/mini-apps-ui-kit-react';
 import { MiniKit } from '@worldcoin/minikit-js';
@@ -26,10 +28,20 @@ import { RPC_URL, WORLD_CHAIN_ID } from '@/lib/constants';
 
 type SweepState = 'idle' | 'loading-tokens' | 'ready' | 'building' | 'pending';
 
+type ExcludedToken = {
+  address: string;
+  symbol: string;
+  name: string;
+  balanceFormatted: string;
+  reason: ScanExclusionReason;
+  reasonLabel: string;
+};
+
 export function Sweep() {
   const { data: session } = useSession();
   const { isInstalled } = useMiniKit();
   const [tokens, setTokens] = useState<WalletToken[]>([]);
+  const [excludedTokens, setExcludedTokens] = useState<ExcludedToken[]>([]);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [plan, setPlan] = useState<BuildSweepResponse | null>(null);
   const [error, setError] = useState<AppError | null>(null);
@@ -64,8 +76,23 @@ export function Sweep() {
     });
 
   const selectedTokens = useMemo(
-    () => tokens.filter((token) => selected[token.address]),
+    () => tokens.filter((token) => selected[token.address] && isForageableToken(token)),
     [selected, tokens],
+  );
+
+  const excludedStaked = useMemo(
+    () => excludedTokens.filter((token) => token.reason === 'staked_re'),
+    [excludedTokens],
+  );
+
+  const excludedIlliquid = useMemo(
+    () =>
+      excludedTokens.filter((token) =>
+        ['no_liquidity', 'not_allowlisted', 'output_too_small'].includes(
+          token.reason,
+        ),
+      ),
+    [excludedTokens],
   );
 
   const selectionKey = useMemo(
@@ -85,6 +112,7 @@ export function Sweep() {
     previewRequestRef.current += 1;
     setIsQuoting(false);
     setTokens([]);
+    setExcludedTokens([]);
     setSelected({});
     setState('loading-tokens');
     setError(null);
@@ -97,6 +125,7 @@ export function Sweep() {
       );
       const payload = (await response.json()) as {
         tokens?: WalletToken[];
+        excluded?: ExcludedToken[];
         error?: string;
       };
 
@@ -106,6 +135,7 @@ export function Sweep() {
 
       const nextTokens = payload.tokens ?? [];
       setTokens(nextTokens);
+      setExcludedTokens(payload.excluded ?? []);
       setSelected(
         Object.fromEntries(nextTokens.map((token) => [token.address, true])),
       );
@@ -166,6 +196,17 @@ export function Sweep() {
 
         lastPreviewedKeyRef.current = previewKey;
         setPlan(nextPlan);
+
+        const quotedAddresses = new Set(
+          nextPlan.quotes.map((quote) => quote.tokenAddress.toLowerCase()),
+        );
+        setSelected((current) => {
+          const next = { ...current };
+          for (const token of selectedTokens) {
+            next[token.address] = quotedAddresses.has(token.address.toLowerCase());
+          }
+          return next;
+        });
       } catch (buildError) {
         if (requestId !== previewRequestRef.current) {
           return;
@@ -304,6 +345,15 @@ export function Sweep() {
       return;
     }
 
+    if (selectedTokens.some((token) => !isForageableToken(token))) {
+      setError({
+        title: 'Staked tokens selected',
+        message:
+          'Re-prefixed staked yield tokens cannot be foraged. Rescan your wallet — they are listed separately and excluded automatically.',
+      });
+      return;
+    }
+
     if (!plan || plan.quotes.length === 0) {
       setError({
         title: 'No swappable tokens',
@@ -338,8 +388,16 @@ export function Sweep() {
         transactions: activePlan.transactions,
       });
 
+      const payload =
+        (result as { data?: Record<string, unknown> }).data ??
+        (result as Record<string, unknown>);
+
+      if (payload?.status === 'error') {
+        throw payload;
+      }
+
       const opHash =
-        (result as { data?: { userOpHash?: string } }).data?.userOpHash ??
+        (payload as { userOpHash?: string })?.userOpHash ??
         (result as { userOpHash?: string }).userOpHash;
 
       if (!opHash) {
@@ -389,7 +447,7 @@ export function Sweep() {
             variant="ghost"
             size="sm"
           >
-            {state === 'loading-tokens' ? 'Scanning...' : 'Rescan Wallet'}
+            {state === 'loading-tokens' ? 'Scanning liquidity...' : 'Rescan Wallet'}
           </ForagerButton>
           {isQuoting ? (
             <span className="forager-subtitle text-xs">Building preview...</span>
@@ -400,8 +458,8 @@ export function Sweep() {
           <div className="space-y-1.5">
             {tokens.length === 0 && state !== 'loading-tokens' ? (
               <p className="forager-subtitle text-sm">
-                No forageable tokens found. WLD, WETH, USDC, WBTC, and staked Re
-                tokens are excluded.
+                No swappable tokens found. Tokens without Uniswap liquidity, staked
+                Re tokens, and WLD/WETH/USDC/WBTC are excluded automatically.
               </p>
             ) : (
               tokens.map((token) => (
@@ -445,6 +503,73 @@ export function Sweep() {
             )}
           </div>
 
+          {excludedIlliquid.length > 0 ? (
+            <div className="space-y-1.5">
+              <p className="forager-subtitle px-1 text-xs font-medium">
+                No liquidity (excluded — cannot swap)
+              </p>
+              {excludedIlliquid.slice(0, 12).map((token) => (
+                <div
+                  key={token.address}
+                  className="forager-card flex min-w-0 items-center gap-2.5 rounded-2xl px-3 py-2 opacity-60"
+                >
+                  <TokenIcon
+                    size="sm"
+                    address={token.address}
+                    symbol={token.symbol}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold leading-tight">
+                      {token.symbol}
+                    </p>
+                    <p className="truncate text-[11px] leading-tight text-forager-text-muted">
+                      {token.reasonLabel}
+                    </p>
+                  </div>
+                  <p className="shrink-0 text-xs font-semibold tabular-nums text-forager-text-muted">
+                    {token.balanceFormatted}
+                  </p>
+                </div>
+              ))}
+              {excludedIlliquid.length > 12 ? (
+                <p className="forager-subtitle px-1 text-xs">
+                  +{excludedIlliquid.length - 12} more without liquidity
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          {excludedStaked.length > 0 ? (
+            <div className="space-y-1.5">
+              <p className="forager-subtitle px-1 text-xs font-medium">
+                Staked Re tokens (excluded — cannot swap)
+              </p>
+              {excludedStaked.map((token) => (
+                <div
+                  key={token.address}
+                  className="forager-card flex min-w-0 items-center gap-2.5 rounded-2xl px-3 py-2 opacity-60"
+                >
+                  <TokenIcon
+                    size="sm"
+                    address={token.address}
+                    symbol={token.symbol}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold leading-tight">
+                      {token.symbol}
+                    </p>
+                    <p className="truncate text-[11px] leading-tight text-forager-text-muted">
+                      {token.reasonLabel}
+                    </p>
+                  </div>
+                  <p className="shrink-0 text-xs font-semibold tabular-nums text-forager-text-muted">
+                    {token.balanceFormatted}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
           {plan && (
             <div className="forager-card rounded-xl p-3 text-sm">
               <div className="mb-2 flex items-center gap-2">
@@ -454,10 +579,19 @@ export function Sweep() {
               <p>Swapping {plan.quotes.length} verified token(s)</p>
               <p>You receive (min): {formatWld(plan.userReceivesWld)}</p>
               {plan.skippedTokens.length > 0 && (
-                <p className="forager-subtitle mt-2 text-xs">
-                  {plan.skippedTokens.length} token(s) skipped (no route or not
-                  allowlisted)
-                </p>
+                <div className="forager-subtitle mt-2 space-y-1 text-xs">
+                  <p>
+                    {plan.skippedTokens.length} token(s) skipped from this
+                    batch
+                  </p>
+                  <ul className="list-disc space-y-0.5 pl-4">
+                    {plan.skippedTokens.slice(0, 6).map((token) => (
+                      <li key={token.address}>
+                        {token.symbol}: {token.reason}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
             </div>
           )}
