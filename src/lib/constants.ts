@@ -13,11 +13,14 @@ export const WETH_ADDRESS =
 export const USDC_ADDRESS =
   '0x79a02482a880bce3f13e09da970dc34db4cd24d1' as const;
 
+export const WBTC_ADDRESS =
+  '0x03c7054bcb39f7b2e5b2c7acb37583e32d70cfa3' as const;
+
 export const PROTECTED_TOKEN_ADDRESSES = new Set([
   WLD_ADDRESS.toLowerCase(),
-  '0x4200000000000000000000000000000000000006', // WETH
-  '0x79a02482a880bce3f13e09da970dc34db4cd24d1', // USDC
-  '0x03c7054bcb39f7b2e5b2c7acb37583e32d70cfa3', // WBTC
+  WETH_ADDRESS.toLowerCase(),
+  USDC_ADDRESS.toLowerCase(),
+  WBTC_ADDRESS.toLowerCase(),
 ]);
 
 export const UNISWAP_V3_QUOTER_V2 =

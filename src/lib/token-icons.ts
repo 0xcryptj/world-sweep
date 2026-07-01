@@ -1,6 +1,27 @@
+import { PIXEL_ICONS } from './pixel-icons';
+import {
+  USDC_ADDRESS,
+  WBTC_ADDRESS,
+  WETH_ADDRESS,
+  WLD_ADDRESS,
+} from './constants';
 import type { WalletToken } from './types';
 
-export const TOKEN_ICON_OVERRIDES: Record<string, string> = {};
+/** Reliable logos for core World Chain assets (Alchemy often has no logo for WLD). */
+export const TOKEN_ICON_OVERRIDES: Record<string, string> = {
+  [WLD_ADDRESS.toLowerCase()]:
+    'https://assets.coingecko.com/coins/images/31069/small/worldcoin.jpeg',
+  wld: 'https://assets.coingecko.com/coins/images/31069/small/worldcoin.jpeg',
+  [WETH_ADDRESS.toLowerCase()]:
+    'https://assets.coingecko.com/coins/images/2518/small/weth.png',
+  weth: 'https://assets.coingecko.com/coins/images/2518/small/weth.png',
+  [USDC_ADDRESS.toLowerCase()]:
+    'https://assets.coingecko.com/coins/images/6319/small/usdc.png',
+  usdc: 'https://assets.coingecko.com/coins/images/6319/small/usdc.png',
+  [WBTC_ADDRESS.toLowerCase()]:
+    'https://assets.coingecko.com/coins/images/7598/small/wrapped_bitcoin_wbtc.png',
+  wbtc: 'https://assets.coingecko.com/coins/images/7598/small/wrapped_bitcoin_wbtc.png',
+};
 
 function checksumLower(address: string): string {
   return address.toLowerCase();
@@ -15,22 +36,28 @@ export function getTokenIconSources(
 ): string[] {
   const address = checksumLower(token.address);
   const symbol = token.symbol.toLowerCase();
-  const sources: string[] = [getTokenIconUrl(address)];
+  const sources: string[] = [];
 
   const override =
     TOKEN_ICON_OVERRIDES[address] ?? TOKEN_ICON_OVERRIDES[symbol];
   if (override) {
-    sources.unshift(override);
+    sources.push(override);
   }
 
   const logo = token.logoUrl?.trim();
-  if (logo && !sources.includes(logo)) {
+  if (logo) {
     sources.push(logo);
   }
 
-  // Only real logos — smold/trustwallet return letter placeholders that look worse than coin.svg.
+  sources.push(
+    `https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/worldchain/assets/${address}/logo.png`,
+    getTokenIconUrl(address),
+  );
+
   return [...new Set(sources)];
 }
+
+export const TOKEN_ICON_FALLBACK = PIXEL_ICONS.coin;
 
 export function tokenIconHue(address: string): number {
   let hash = 0;

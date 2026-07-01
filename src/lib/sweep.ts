@@ -20,6 +20,7 @@ import {
 import { isForageableToken } from './token-filters';
 import {
   applySlippage,
+  deserializeRoute,
   encodeV3Path,
   quoteRouteToWld,
   type RouteQuote,
@@ -108,6 +109,14 @@ function buildPermit2Approval(token: Address, amount: bigint) {
   );
 }
 
+async function resolveRoute(token: WalletToken): Promise<RouteQuote | null> {
+  if (token.cachedRoute) {
+    return deserializeRoute(token.cachedRoute);
+  }
+
+  return quoteRouteToWld(token);
+}
+
 export async function buildSweepPlan({
   walletAddress,
   tokens,
@@ -145,7 +154,12 @@ export async function buildSweepPlan({
       continue;
     }
 
-    const route = await quoteRouteToWld(token);
+    const amountIn = BigInt(token.balance);
+    if (amountIn <= BigInt(0)) {
+      continue;
+    }
+
+    const route = await resolveRoute(token);
 
     if (!route) {
       skippedTokens.push({
@@ -156,7 +170,6 @@ export async function buildSweepPlan({
       continue;
     }
 
-    const amountIn = BigInt(token.balance);
     const minWldOut = applySlippage(route.amountOut, SLIPPAGE_BPS);
 
     if (minWldOut < MIN_WLD_OUT_WEI) {

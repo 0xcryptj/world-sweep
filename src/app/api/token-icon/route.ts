@@ -1,3 +1,4 @@
+import { TOKEN_ICON_FALLBACK } from '@/lib/token-icons';
 import { fetchAlchemyTokenMetadata } from '@/lib/tokens';
 import { getAddress, isAddress } from 'viem';
 import { NextResponse } from 'next/server';
@@ -17,7 +18,7 @@ export async function GET(request: Request) {
     const logoUrl = metadata?.logo?.trim();
 
     if (!logoUrl) {
-      return NextResponse.json({ error: 'No logo found' }, { status: 404 });
+      return NextResponse.redirect(new URL(TOKEN_ICON_FALLBACK, request.url));
     }
 
     const imageResponse = await fetch(logoUrl, {
@@ -25,15 +26,16 @@ export async function GET(request: Request) {
     });
 
     if (!imageResponse.ok) {
-      return NextResponse.json(
-        { error: 'Failed to fetch token logo' },
-        { status: 502 },
-      );
+      return NextResponse.redirect(new URL(TOKEN_ICON_FALLBACK, request.url));
     }
 
     const bytes = await imageResponse.arrayBuffer();
     const contentType =
       imageResponse.headers.get('content-type') ?? 'image/png';
+
+    if (bytes.byteLength < 32) {
+      return NextResponse.redirect(new URL(TOKEN_ICON_FALLBACK, request.url));
+    }
 
     return new NextResponse(bytes, {
       headers: {
@@ -41,9 +43,7 @@ export async function GET(request: Request) {
         'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800',
       },
     });
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : 'Failed to load token icon';
-    return NextResponse.json({ error: message }, { status: 500 });
+  } catch {
+    return NextResponse.redirect(new URL(TOKEN_ICON_FALLBACK, request.url));
   }
 }

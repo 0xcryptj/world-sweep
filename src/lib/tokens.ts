@@ -8,6 +8,7 @@ import {
 } from 'viem';
 import { worldchain } from 'viem/chains';
 import { erc20Abi } from './abis';
+import { mapPool } from './async-pool';
 import { PROTECTED_TOKEN_ADDRESSES, RPC_URL, WLD_ADDRESS } from './constants';
 import { isForageableToken } from './token-filters';
 import type { WalletToken } from './types';
@@ -177,34 +178,35 @@ export async function fetchAllWalletTokens(
 export async function enrichTokenMetadata(
   tokens: WalletToken[],
 ): Promise<WalletToken[]> {
-  return Promise.all(
-    tokens.map(async (token) => {
-      const address = token.address as Address;
-      const [alchemy, onChain] = await Promise.all([
-        fetchAlchemyTokenMetadata(token.address),
-        readOnChainMetadata(address),
-      ]);
+  return mapPool(tokens, 12, async (token) => {
+    const address = token.address as Address;
+    const alchemy = await fetchAlchemyTokenMetadata(token.address);
+    const hasAlchemyMetadata =
+      Boolean(alchemy?.symbol?.trim()) && alchemy?.decimals != null;
 
-      const symbol =
-        alchemy?.symbol?.trim() ||
-        onChain.symbol?.trim() ||
-        token.symbol;
-      const name =
-        alchemy?.name?.trim() || onChain.name?.trim() || token.name;
-      const decimals =
-        alchemy?.decimals ?? onChain.decimals ?? token.decimals;
-      const logoUrl = alchemy?.logo?.trim() || null;
+    const onChain = hasAlchemyMetadata
+      ? {}
+      : await readOnChainMetadata(address);
 
-      return {
-        ...token,
-        symbol,
-        name,
-        decimals,
-        logoUrl,
-        balanceFormatted: formatUnitsCapped(BigInt(token.balance), decimals),
-      };
-    }),
-  );
+    const symbol =
+      alchemy?.symbol?.trim() ||
+      onChain.symbol?.trim() ||
+      token.symbol;
+    const name =
+      alchemy?.name?.trim() || onChain.name?.trim() || token.name;
+    const decimals =
+      alchemy?.decimals ?? onChain.decimals ?? token.decimals;
+    const logoUrl = alchemy?.logo?.trim() || null;
+
+    return {
+      ...token,
+      symbol,
+      name,
+      decimals,
+      logoUrl,
+      balanceFormatted: formatUnitsCapped(BigInt(token.balance), decimals),
+    };
+  });
 }
 
 export { client as publicClient };

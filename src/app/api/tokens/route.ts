@@ -1,10 +1,15 @@
 import { scanWalletForForage } from '@/lib/forage-scan';
+import {
+  getCachedWalletScan,
+  setCachedWalletScan,
+} from '@/lib/quote-cache';
 import { fetchAllWalletTokens } from '@/lib/tokens';
 import { NextResponse } from 'next/server';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const address = searchParams.get('address');
+  const refresh = searchParams.get('refresh') === '1';
 
   if (!address) {
     return NextResponse.json(
@@ -14,10 +19,20 @@ export async function GET(request: Request) {
   }
 
   try {
+    if (!refresh) {
+      const cached = getCachedWalletScan(address);
+      if (cached) {
+        return NextResponse.json(cached);
+      }
+    }
+
     const holdings = await fetchAllWalletTokens(address);
     const { swappable, excluded } = await scanWalletForForage(holdings);
+    const payload = { tokens: swappable, excluded };
 
-    return NextResponse.json({ tokens: swappable, excluded });
+    setCachedWalletScan(address, payload);
+
+    return NextResponse.json(payload);
   } catch (error) {
     const message =
       error instanceof Error ? error.message : 'Failed to load tokens';

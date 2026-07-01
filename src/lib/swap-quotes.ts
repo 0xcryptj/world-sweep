@@ -15,8 +15,13 @@ import {
   WETH_ADDRESS,
   WLD_ADDRESS,
 } from './constants';
+import {
+  getCachedRoute,
+  routeCacheKey,
+  setCachedRoute,
+} from './quote-cache';
 import { publicClient } from './tokens';
-import type { WalletToken } from './types';
+import type { CachedRouteQuote, WalletToken } from './types';
 
 export type RouteHop = {
   tokenIn: Address;
@@ -45,6 +50,30 @@ const quoterSingleErrorAbi = [
 
 export function applySlippage(amount: bigint, slippageBps: number): bigint {
   return (amount * BigInt(10_000 - slippageBps)) / BigInt(10_000);
+}
+
+export function serializeRoute(route: RouteQuote): CachedRouteQuote {
+  return {
+    hops: route.hops.map((hop) => ({
+      tokenIn: hop.tokenIn,
+      tokenOut: hop.tokenOut,
+      fee: hop.fee,
+    })),
+    amountOut: route.amountOut.toString(),
+    label: route.label,
+  };
+}
+
+export function deserializeRoute(cached: CachedRouteQuote): RouteQuote {
+  return {
+    hops: cached.hops.map((hop) => ({
+      tokenIn: getAddress(hop.tokenIn),
+      tokenOut: getAddress(hop.tokenOut),
+      fee: hop.fee,
+    })),
+    amountOut: BigInt(cached.amountOut),
+    label: cached.label,
+  };
 }
 
 function encodeV3Path(hops: RouteHop[]): Hex {
@@ -141,82 +170,130 @@ async function quoteExactInputSingle(
   }
 }
 
+async function bestQuoteAcrossFees(
+  tokenIn: Address,
+  tokenOut: Address,
+  amountIn: bigint,
+): Promise<{ fee: number; amountOut: bigint } | null> {
+  const quotes = await Promise.all(
+    FEE_TIERS.map(async (fee) => {
+      const amountOut = await quoteExactInputSingle(
+        tokenIn,
+        tokenOut,
+        amountIn,
+        fee,
+      );
+      return amountOut ? { fee, amountOut } : null;
+    }),
+  );
+
+  const valid = quotes.filter(
+    (quote): quote is { fee: number; amountOut: bigint } => quote !== null,
+  );
+
+  if (valid.length === 0) {
+    return null;
+  }
+
+  return valid.reduce((best, current) =>
+    current.amountOut > best.amountOut ? current : best,
+  );
+}
+
 async function quoteHop(
   tokenIn: Address,
   tokenOut: Address,
   amountIn: bigint,
 ): Promise<{ fee: number; amountOut: bigint } | null> {
-  for (const fee of FEE_TIERS) {
-    const amountOut = await quoteExactInputSingle(tokenIn, tokenOut, amountIn, fee);
-    if (amountOut) {
-      return { fee, amountOut };
-    }
+  return bestQuoteAcrossFees(tokenIn, tokenOut, amountIn);
+}
+
+async function quoteMultiHopRoute(
+  tokenIn: Address,
+  amountIn: bigint,
+  intermediate: Address,
+  intermediateLabel: string,
+  symbol: string,
+): Promise<RouteQuote | null> {
+  const firstHop = await quoteHop(tokenIn, intermediate, amountIn);
+  if (!firstHop) {
+    return null;
   }
 
-  return null;
+  const secondHop = await bestQuoteAcrossFees(
+    intermediate,
+    WLD_ADDRESS,
+    firstHop.amountOut,
+  );
+
+  if (!secondHop) {
+    return null;
+  }
+
+  return {
+    hops: [
+      { tokenIn, tokenOut: intermediate, fee: firstHop.fee },
+      {
+        tokenIn: intermediate,
+        tokenOut: WLD_ADDRESS,
+        fee: secondHop.fee,
+      },
+    ],
+    amountOut: secondHop.amountOut,
+    label: `${symbol} → ${intermediateLabel} → WLD`,
+  };
 }
 
 export async function quoteRouteToWld(
   token: WalletToken,
 ): Promise<RouteQuote | null> {
+  const cacheKey = routeCacheKey(token.address, token.balance);
+  const cached = getCachedRoute(cacheKey);
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  if (token.cachedRoute) {
+    const route = deserializeRoute(token.cachedRoute);
+    setCachedRoute(cacheKey, route);
+    return route;
+  }
+
   const tokenIn = getAddress(token.address) as Address;
   const amountIn = BigInt(token.balance);
 
   if (amountIn <= BigInt(0)) {
+    setCachedRoute(cacheKey, null);
     return null;
   }
 
   const acceptQuote = (route: RouteQuote): RouteQuote | null =>
     route.amountOut >= MIN_WLD_OUT_WEI ? route : null;
 
-  for (const fee of FEE_TIERS) {
-    const amountOut = await quoteExactInputSingle(
-      tokenIn,
-      WLD_ADDRESS,
-      amountIn,
-      fee,
-    );
-
-    if (amountOut) {
-      return acceptQuote({
-        hops: [{ tokenIn, tokenOut: WLD_ADDRESS, fee }],
-        amountOut,
-        label: `${token.symbol} → WLD`,
-      });
-    }
+  const directHop = await bestQuoteAcrossFees(tokenIn, WLD_ADDRESS, amountIn);
+  if (directHop) {
+    const route = acceptQuote({
+      hops: [{ tokenIn, tokenOut: WLD_ADDRESS, fee: directHop.fee }],
+      amountOut: directHop.amountOut,
+      label: `${token.symbol} → WLD`,
+    });
+    setCachedRoute(cacheKey, route);
+    return route;
   }
 
-  for (const [intermediate, label] of [
-    [WETH_ADDRESS, 'WETH'] as const,
-    [USDC_ADDRESS, 'USDC'] as const,
-  ]) {
-    const firstHop = await quoteHop(tokenIn, intermediate, amountIn);
-    if (!firstHop) {
-      continue;
-    }
+  const multiHopRoutes = await Promise.all([
+    quoteMultiHopRoute(tokenIn, amountIn, WETH_ADDRESS, 'WETH', token.symbol),
+    quoteMultiHopRoute(tokenIn, amountIn, USDC_ADDRESS, 'USDC', token.symbol),
+  ]);
 
-    for (const secondFee of FEE_TIERS) {
-      const amountOut = await quoteExactInputSingle(
-        intermediate,
-        WLD_ADDRESS,
-        firstHop.amountOut,
-        secondFee,
-      );
+  const route =
+    multiHopRoutes
+      .map((candidate) => (candidate ? acceptQuote(candidate) : null))
+      .filter((candidate): candidate is RouteQuote => candidate !== null)
+      .sort((a, b) => (a.amountOut > b.amountOut ? -1 : 1))[0] ?? null;
 
-      if (amountOut) {
-        return acceptQuote({
-          hops: [
-            { tokenIn, tokenOut: intermediate, fee: firstHop.fee },
-            { tokenIn: intermediate, tokenOut: WLD_ADDRESS, fee: secondFee },
-          ],
-          amountOut,
-          label: `${token.symbol} → ${label} → WLD`,
-        });
-      }
-    }
-  }
-
-  return null;
+  setCachedRoute(cacheKey, route);
+  return route;
 }
 
 /** True when the token has a quotable Uniswap route with enough WLD output after slippage. */

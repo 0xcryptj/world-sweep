@@ -2,14 +2,18 @@
 
 import { ErrorBanner } from '@/components/Sweep/ErrorBanner';
 import { TokenIcon } from '@/components/Sweep/TokenIcon';
+import { ForagerActivity, TokenListSkeleton } from '@/components/ForagerActivity';
 import { PixelIcon } from '@/components/PixelIcon';
 import { ForagerButton } from '@/components/ForagerButton';
 import {
   formatApiError,
   formatMiniKitError,
+  isSimulationFailedError,
+  isUserRejectedError,
   shortErrorLabel,
   type AppError,
 } from '@/lib/errors';
+import { sendMiniKitTransaction } from '@/lib/minikit-transaction';
 import { hapticImpact, hapticNotification, hapticSelection } from '@/lib/haptics';
 import { APP_TAGLINE } from '@/lib/branding';
 import { formatWld } from '@/lib/sweep';
@@ -24,18 +28,40 @@ import { useSession } from 'next-auth/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPublicClient, http } from 'viem';
 import { worldchain } from 'viem/chains';
-import { RPC_URL, WORLD_CHAIN_ID } from '@/lib/constants';
+import { RPC_URL, WORLD_CHAIN_ID, MAX_TOKENS_PER_SWEEP } from '@/lib/constants';
 
 type SweepState = 'idle' | 'loading-tokens' | 'ready' | 'building' | 'pending';
+
+type SubmitPhase = 'idle' | 'building' | 'simulating' | 'confirming';
 
 type ExcludedToken = {
   address: string;
   symbol: string;
   name: string;
   balanceFormatted: string;
+  logoUrl?: string | null;
   reason: ScanExclusionReason;
   reasonLabel: string;
 };
+
+const SCAN_ACTIVITY_MESSAGES = [
+  'Reading your wallet balances...',
+  'Checking Uniswap liquidity...',
+  'Filtering junk and staked tokens...',
+  'Almost done...',
+];
+
+const BUILD_ACTIVITY_MESSAGES = [
+  'Preparing your swap batch...',
+  'Encoding Permit2 approvals...',
+  'Calculating minimum WLD output...',
+];
+
+const SIMULATE_ACTIVITY_MESSAGES = [
+  'World App is simulating your transaction...',
+  'This can take up to a minute — hang tight.',
+  'Keep World App open while the request loads.',
+];
 
 export function Sweep() {
   const { data: session } = useSession();
@@ -56,6 +82,10 @@ export function Sweep() {
   const previewRequestRef = useRef(0);
   const lastPreviewedKeyRef = useRef('');
   const [isQuoting, setIsQuoting] = useState(false);
+  const [submitPhase, setSubmitPhase] = useState<SubmitPhase>('idle');
+  const [txActivityMessages, setTxActivityMessages] = useState(
+    SIMULATE_ACTIVITY_MESSAGES,
+  );
 
   const walletAddress =
     session?.user?.walletAddress ?? MiniKit.user?.walletAddress ?? '';
@@ -104,7 +134,37 @@ export function Sweep() {
     [selectedTokens],
   );
 
-  const loadTokens = useCallback(async () => {
+  const activityOverlay = useMemo(() => {
+    if (state === 'loading-tokens') {
+      return {
+        title: 'Scanning wallet',
+        messages: SCAN_ACTIVITY_MESSAGES,
+        icon: 'coin' as const,
+      };
+    }
+
+    if (submitPhase === 'building') {
+      return {
+        title: 'Preparing forage',
+        messages: BUILD_ACTIVITY_MESSAGES,
+        icon: 'swap' as const,
+      };
+    }
+
+    if (submitPhase === 'simulating') {
+      return {
+        title: 'Opening World App',
+        messages: txActivityMessages,
+        icon: 'swap' as const,
+      };
+    }
+
+    return null;
+  }, [state, submitPhase, txActivityMessages]);
+
+  const isSubmitting = submitPhase !== 'idle';
+
+  const loadTokens = useCallback(async (forceRefresh = false) => {
     if (!walletAddress) {
       return;
     }
@@ -120,9 +180,12 @@ export function Sweep() {
     lastPreviewedKeyRef.current = '';
 
     try {
-      const response = await fetch(
-        `/api/tokens?address=${encodeURIComponent(walletAddress)}`,
-      );
+      const query = new URLSearchParams({ address: walletAddress });
+      if (forceRefresh) {
+        query.set('refresh', '1');
+      }
+
+      const response = await fetch(`/api/tokens?${query.toString()}`);
       const payload = (await response.json()) as {
         tokens?: WalletToken[];
         excluded?: ExcludedToken[];
@@ -137,7 +200,12 @@ export function Sweep() {
       setTokens(nextTokens);
       setExcludedTokens(payload.excluded ?? []);
       setSelected(
-        Object.fromEntries(nextTokens.map((token) => [token.address, true])),
+        Object.fromEntries(
+          nextTokens.map((token, index) => [
+            token.address,
+            index < MAX_TOKENS_PER_SWEEP,
+          ]),
+        ),
       );
       setState('ready');
     } catch (loadError) {
@@ -152,26 +220,29 @@ export function Sweep() {
     }
   }, [walletAddress]);
 
-  const buildPlan = useCallback(async () => {
-    const response = await fetch('/api/build-sweep', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        walletAddress,
-        tokens: selectedTokens,
-      }),
-    });
+  const buildPlan = useCallback(
+    async (tokensForPlan: WalletToken[]) => {
+      const response = await fetch('/api/build-sweep', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          walletAddress,
+          tokens: tokensForPlan,
+        }),
+      });
 
-    const payload = (await response.json()) as BuildSweepResponse & {
-      error?: string;
-    };
+      const payload = (await response.json()) as BuildSweepResponse & {
+        error?: string;
+      };
 
-    if (!response.ok) {
-      throw new Error(payload.error ?? 'Failed to build sweep');
-    }
+      if (!response.ok) {
+        throw new Error(payload.error ?? 'Failed to build sweep');
+      }
 
-    return payload;
-  }, [selectedTokens, walletAddress]);
+      return payload;
+    },
+    [walletAddress],
+  );
 
   const runAutoPreview = useCallback(
     async (previewKey: string) => {
@@ -189,7 +260,7 @@ export function Sweep() {
       setError(null);
 
       try {
-        const nextPlan = await buildPlan();
+        const nextPlan = await buildPlan(selectedTokens);
         if (requestId !== previewRequestRef.current) {
           return;
         }
@@ -227,7 +298,7 @@ export function Sweep() {
         }
       }
     },
-    [buildPlan, selectedTokens.length, walletAddress],
+    [buildPlan, selectedTokens, walletAddress],
   );
 
   useEffect(() => {
@@ -249,7 +320,7 @@ export function Sweep() {
 
     const timer = window.setTimeout(() => {
       void runAutoPreview(selectionKey);
-    }, 500);
+    }, 250);
 
     return () => window.clearTimeout(timer);
   }, [runAutoPreview, selectionKey, walletAddress, state]);
@@ -282,11 +353,12 @@ export function Sweep() {
 
         setFailureLabel('Forage failed');
         setUserOpHash('');
+        setSubmitPhase('idle');
         lastRecordedPlanRef.current = null;
         lastUserOpHashRef.current = '';
         setState('ready');
         setPlan(null);
-        void loadTokens();
+        void loadTokens(true);
         setTimeout(() => setButtonState(undefined), 3000);
       })();
     }
@@ -325,6 +397,7 @@ export function Sweep() {
         setError(nextError);
         setFailureLabel(shortErrorLabel(nextError));
         setUserOpHash('');
+        setSubmitPhase('idle');
         setState('ready');
         setTimeout(() => setButtonState(undefined), 3000);
       })();
@@ -367,51 +440,93 @@ export function Sweep() {
     setButtonState('pending');
     setState('pending');
     setError(null);
+    setTxActivityMessages(SIMULATE_ACTIVITY_MESSAGES);
+    setSubmitPhase('building');
 
     try {
-      setIsQuoting(true);
-      const activePlan = await buildPlan();
+      const batchSizes = [
+        Math.min(selectedTokens.length, MAX_TOKENS_PER_SWEEP),
+        2,
+        1,
+      ].filter((size, index, sizes) => size > 0 && sizes.indexOf(size) === index);
 
-      if (activePlan.quotes.length === 0) {
-        throw new Error(
-          'No selected tokens passed liquidity checks. Review skipped tokens in the preview.',
-        );
+      let activePlan: BuildSweepResponse | null = null;
+      let lastSweepError: unknown = null;
+
+      for (const batchSize of batchSizes) {
+        const batch = selectedTokens.slice(0, batchSize);
+
+        try {
+          setSubmitPhase('building');
+          activePlan = await buildPlan(batch);
+
+          if (activePlan.quotes.length === 0) {
+            throw new Error(
+              'No selected tokens passed liquidity checks. Review skipped tokens in the preview.',
+            );
+          }
+
+          setPlan(activePlan);
+          setState('pending');
+          lastRecordedPlanRef.current = activePlan;
+          setSubmitPhase('simulating');
+
+          const result = await sendMiniKitTransaction({
+            chainId: WORLD_CHAIN_ID,
+            transactions: activePlan.transactions,
+          });
+
+          const payload =
+            (result as { data?: Record<string, unknown> }).data ??
+            (result as Record<string, unknown>);
+
+          if (payload?.status === 'error') {
+            throw payload;
+          }
+
+          const opHash =
+            (payload as { userOpHash?: string })?.userOpHash ??
+            (result as { userOpHash?: string }).userOpHash;
+
+          if (!opHash) {
+            throw new Error('No userOpHash returned');
+          }
+
+          lastUserOpHashRef.current = opHash;
+          setUserOpHash(opHash);
+          setSubmitPhase('confirming');
+          return;
+        } catch (attemptError) {
+          lastSweepError = attemptError;
+
+          const isLastBatch = batchSize === batchSizes[batchSizes.length - 1];
+          if (isSimulationFailedError(attemptError) && !isLastBatch) {
+            setTxActivityMessages([
+              'One token failed simulation — retrying with fewer...',
+              ...SIMULATE_ACTIVITY_MESSAGES,
+            ]);
+            setSubmitPhase('simulating');
+            continue;
+          }
+
+          throw attemptError;
+        }
       }
 
-      setPlan(activePlan);
-      setState('pending');
-      setIsQuoting(false);
-      lastRecordedPlanRef.current = activePlan;
-
-      const result = await MiniKit.sendTransaction({
-        chainId: WORLD_CHAIN_ID,
-        transactions: activePlan.transactions,
-      });
-
-      const payload =
-        (result as { data?: Record<string, unknown> }).data ??
-        (result as Record<string, unknown>);
-
-      if (payload?.status === 'error') {
-        throw payload;
-      }
-
-      const opHash =
-        (payload as { userOpHash?: string })?.userOpHash ??
-        (result as { userOpHash?: string }).userOpHash;
-
-      if (!opHash) {
-        throw new Error('No userOpHash returned');
-      }
-
-      lastUserOpHashRef.current = opHash;
-      setUserOpHash(opHash);
+      throw lastSweepError ?? new Error('Forage transaction failed');
     } catch (sweepError) {
+      if (isUserRejectedError(sweepError)) {
+        setSubmitPhase('idle');
+        setState('ready');
+        setButtonState(undefined);
+        return;
+      }
+
       console.error('Sweep error payload:', sweepError);
       void hapticNotification('error');
       setButtonState('failed');
       setState('ready');
-      setIsQuoting(false);
+      setSubmitPhase('idle');
       const formatted = formatMiniKitError(sweepError);
       setError(formatted);
       setFailureLabel(shortErrorLabel(formatted));
@@ -420,6 +535,24 @@ export function Sweep() {
   };
 
   const canForage = Boolean(plan && plan.quotes.length > 0);
+  const forageButtonLabel = (() => {
+    if (submitPhase === 'building') {
+      return 'Preparing forage...';
+    }
+    if (submitPhase === 'simulating') {
+      return 'Opening World App...';
+    }
+    if (submitPhase === 'confirming' || isConfirming) {
+      return 'Confirming...';
+    }
+    if (isQuoting) {
+      return 'Building preview...';
+    }
+    if (canForage) {
+      return 'Forage to WLD';
+    }
+    return 'No swappable tokens selected';
+  })();
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col">
@@ -441,22 +574,36 @@ export function Sweep() {
           <ForagerButton
             onClick={() => {
               void hapticImpact('light');
-              void loadTokens();
+              void loadTokens(true);
             }}
-            disabled={!walletAddress || state === 'loading-tokens'}
+            disabled={!walletAddress || state === 'loading-tokens' || isSubmitting}
             variant="ghost"
             size="sm"
           >
-            {state === 'loading-tokens' ? 'Scanning liquidity...' : 'Rescan Wallet'}
+            {state === 'loading-tokens' ? 'Scanning wallet...' : 'Rescan Wallet'}
           </ForagerButton>
           {isQuoting ? (
-            <span className="forager-subtitle text-xs">Building preview...</span>
+            <span className="forager-subtitle flex items-center gap-1.5 text-xs">
+              <span className="forager-activity-dot" />
+              Building preview...
+            </span>
           ) : null}
         </div>
 
-        <div className="forager-scroll min-h-0 flex-1 space-y-3 pb-2">
+        <div className="relative min-h-0 flex-1">
+          {activityOverlay ? (
+            <ForagerActivity
+              title={activityOverlay.title}
+              messages={activityOverlay.messages}
+              icon={activityOverlay.icon}
+            />
+          ) : null}
+
+          <div className="forager-scroll h-full space-y-3 pb-2">
           <div className="space-y-1.5">
-            {tokens.length === 0 && state !== 'loading-tokens' ? (
+            {state === 'loading-tokens' ? (
+              <TokenListSkeleton rows={5} />
+            ) : tokens.length === 0 ? (
               <p className="forager-subtitle text-sm">
                 No swappable tokens found. Tokens without Uniswap liquidity, staked
                 Re tokens, and WLD/WETH/USDC/WBTC are excluded automatically.
@@ -470,7 +617,8 @@ export function Sweep() {
                   <input
                     type="checkbox"
                     checked={Boolean(selected[token.address])}
-                    className="h-4 w-4 shrink-0 accent-forager-purple"
+                    disabled={state === 'loading-tokens' || isSubmitting}
+                    className="h-4 w-4 shrink-0 accent-forager-purple disabled:opacity-50"
                     onChange={(event) => {
                       void hapticSelection();
                       lastPreviewedKeyRef.current = '';
@@ -517,6 +665,7 @@ export function Sweep() {
                     size="sm"
                     address={token.address}
                     symbol={token.symbol}
+                    logoUrl={token.logoUrl}
                   />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold leading-tight">
@@ -553,6 +702,7 @@ export function Sweep() {
                     size="sm"
                     address={token.address}
                     symbol={token.symbol}
+                    logoUrl={token.logoUrl}
                   />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold leading-tight">
@@ -595,6 +745,7 @@ export function Sweep() {
               )}
             </div>
           )}
+          </div>
         </div>
       </div>
 
@@ -602,7 +753,12 @@ export function Sweep() {
         <LiveFeedback
           label={{
             failed: failureLabel,
-            pending: isConfirming ? 'Confirming...' : 'Forage pending',
+            pending:
+              submitPhase === 'simulating'
+                ? 'Opening World App...'
+                : isConfirming
+                  ? 'Confirming...'
+                  : 'Forage pending',
             success: 'Forage successful',
           }}
           state={buttonState}
@@ -616,17 +772,13 @@ export function Sweep() {
               isConfirming ||
               state === 'loading-tokens' ||
               isQuoting ||
-              state === 'pending'
+              isSubmitting
             }
             size="lg"
             variant="primary"
             className="w-full"
           >
-            {isQuoting
-              ? 'Building preview...'
-              : canForage
-                ? 'Forage to WLD'
-                : 'No swappable tokens selected'}
+            {forageButtonLabel}
           </ForagerButton>
         </LiveFeedback>
       </div>

@@ -6,6 +6,18 @@ export type WalletToken = {
   balance: string;
   balanceFormatted: string;
   logoUrl?: string | null;
+  /** Serialized Uniswap route from the liquidity scan — avoids re-quoting on preview. */
+  cachedRoute?: CachedRouteQuote | null;
+};
+
+export type CachedRouteQuote = {
+  hops: Array<{
+    tokenIn: string;
+    tokenOut: string;
+    fee: number;
+  }>;
+  amountOut: string;
+  label: string;
 };
 
 export type SweepQuote = {

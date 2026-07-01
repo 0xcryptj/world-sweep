@@ -28,7 +28,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   invalid_token:
     'One or more tokens in this batch are not on the Permit2 allowlist. Preview again after rescanning — only allowlisted tokens with liquidity are included.',
   simulation_failed:
-    'World App could not simulate this swap batch. Only tokens with a verified Uniswap route are included — try fewer selections or rescan. Staked Re tokens are always excluded.',
+    'World App could not simulate this swap batch. One token may block transfers or swaps even when quoted — try foraging fewer tokens at a time, or deselect the most recent junk tokens and rescan.',
   user_rejected: 'You cancelled the transaction in World App.',
   transaction_failed:
     'The transaction was submitted but reverted on-chain. Try fewer tokens or preview the sweep first.',
@@ -109,6 +109,15 @@ function formatDetails(details: unknown): string | undefined {
   }
 }
 
+function isEmptyRecord(value: unknown): boolean {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Object.keys(value as Record<string, unknown>).length === 0
+  );
+}
+
 function fromErrorCode(code: string, details?: unknown): AppError {
   return {
     code,
@@ -180,7 +189,10 @@ export function formatMiniKitError(error: unknown): AppError {
   if (code) {
     const normalizedCode =
       code === 'invalid_token' ? 'invalid_contract' : code;
-    const formatted = fromErrorCode(normalizedCode, details);
+    const formatted = fromErrorCode(
+      normalizedCode,
+      isEmptyRecord(details) ? undefined : details,
+    );
     const nativeMessage = candidate.message ?? candidate.shortMessage;
 
     if (
@@ -227,4 +239,72 @@ export function shortErrorLabel(error: AppError): string {
   }
 
   return error.title;
+}
+
+export function isSimulationFailedError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const candidate = error as {
+    code?: string;
+    error_code?: string;
+    data?: { error_code?: string };
+    message?: string;
+  };
+
+  const code =
+    candidate.code ??
+    candidate.error_code ??
+    candidate.data?.error_code;
+
+  return (
+    code === 'simulation_failed' ||
+    /simulation.?failed/i.test(candidate.message ?? '')
+  );
+}
+
+export function isUserRejectedError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const candidate = error as {
+    code?: string;
+    error_code?: string;
+    data?: { error_code?: string };
+    message?: string;
+  };
+
+  const code =
+    candidate.code ??
+    candidate.error_code ??
+    candidate.data?.error_code;
+
+  return (
+    code === 'user_rejected' ||
+    /user.?rejected|cancelled|canceled/i.test(candidate.message ?? '')
+  );
+}
+
+export function getMiniKitErrorCode(error: unknown): string | undefined {
+  if (!error || typeof error !== 'object') {
+    return undefined;
+  }
+
+  const candidate = error as {
+    code?: string;
+    error_code?: string;
+    data?: { error_code?: string };
+    message?: string;
+  };
+
+  return (
+    candidate.code ??
+    candidate.error_code ??
+    candidate.data?.error_code ??
+    (candidate.message?.startsWith('Transaction failed:')
+      ? candidate.message.replace('Transaction failed:', '').trim()
+      : undefined)
+  );
 }
