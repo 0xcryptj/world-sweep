@@ -41,6 +41,9 @@ export function Sweep() {
   const [userOpHash, setUserOpHash] = useState('');
   const lastRecordedPlanRef = useRef<BuildSweepResponse | null>(null);
   const lastUserOpHashRef = useRef('');
+  const previewRequestRef = useRef(0);
+  const lastPreviewedKeyRef = useRef('');
+  const [isQuoting, setIsQuoting] = useState(false);
 
   const walletAddress =
     session?.user?.walletAddress ?? MiniKit.user?.walletAddress ?? '';
@@ -65,14 +68,28 @@ export function Sweep() {
     [selected, tokens],
   );
 
+  const selectionKey = useMemo(
+    () =>
+      selectedTokens
+        .map((token) => `${token.address}:${token.balance}`)
+        .sort()
+        .join('|'),
+    [selectedTokens],
+  );
+
   const loadTokens = useCallback(async () => {
     if (!walletAddress) {
       return;
     }
 
+    previewRequestRef.current += 1;
+    setIsQuoting(false);
+    setTokens([]);
+    setSelected({});
     setState('loading-tokens');
     setError(null);
     setPlan(null);
+    lastPreviewedKeyRef.current = '';
 
     try {
       const response = await fetch(
@@ -105,11 +122,96 @@ export function Sweep() {
     }
   }, [walletAddress]);
 
+  const buildPlan = useCallback(async () => {
+    const response = await fetch('/api/build-sweep', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        walletAddress,
+        tokens: selectedTokens,
+      }),
+    });
+
+    const payload = (await response.json()) as BuildSweepResponse & {
+      error?: string;
+    };
+
+    if (!response.ok) {
+      throw new Error(payload.error ?? 'Failed to build sweep');
+    }
+
+    return payload;
+  }, [selectedTokens, walletAddress]);
+
+  const runAutoPreview = useCallback(
+    async (previewKey: string) => {
+      if (!walletAddress || selectedTokens.length === 0) {
+        setPlan(null);
+        return;
+      }
+
+      if (lastPreviewedKeyRef.current === previewKey) {
+        return;
+      }
+
+      const requestId = ++previewRequestRef.current;
+      setIsQuoting(true);
+      setError(null);
+
+      try {
+        const nextPlan = await buildPlan();
+        if (requestId !== previewRequestRef.current) {
+          return;
+        }
+
+        lastPreviewedKeyRef.current = previewKey;
+        setPlan(nextPlan);
+      } catch (buildError) {
+        if (requestId !== previewRequestRef.current) {
+          return;
+        }
+
+        lastPreviewedKeyRef.current = previewKey;
+        const formatted = formatApiError(
+          buildError instanceof Error
+            ? buildError.message
+            : 'Failed to build sweep',
+        );
+        setPlan(null);
+        setError(formatted);
+        setFailureLabel(shortErrorLabel(formatted));
+      } finally {
+        if (requestId === previewRequestRef.current) {
+          setIsQuoting(false);
+        }
+      }
+    },
+    [buildPlan, selectedTokens.length, walletAddress],
+  );
+
   useEffect(() => {
     if (walletAddress) {
       void loadTokens();
     }
   }, [loadTokens, walletAddress]);
+
+  useEffect(() => {
+    if (!walletAddress || selectedTokens.length === 0) {
+      setPlan(null);
+      lastPreviewedKeyRef.current = '';
+      return;
+    }
+
+    if (state === 'loading-tokens' || state === 'pending') {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      void runAutoPreview(selectionKey);
+    }, 500);
+
+    return () => window.clearTimeout(timer);
+  }, [runAutoPreview, selectionKey, walletAddress, state]);
 
   useEffect(() => {
     if (isSuccess) {
@@ -153,7 +255,7 @@ export function Sweep() {
         void hapticNotification('error');
         setButtonState('failed');
 
-        let nextError: AppError = {
+        const nextError: AppError = {
           title: 'On-chain failure',
           message:
             'World App submitted the forage, but the batch did not complete successfully.',
@@ -188,62 +290,6 @@ export function Sweep() {
     }
   }, [isError, isSuccess, loadTokens, userOpHash, walletAddress]);
 
-  const buildPlan = async () => {
-    const response = await fetch('/api/build-sweep', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        walletAddress,
-        tokens: selectedTokens,
-      }),
-    });
-
-    const payload = (await response.json()) as BuildSweepResponse & {
-      error?: string;
-    };
-
-    if (!response.ok) {
-      throw new Error(payload.error ?? 'Failed to build sweep');
-    }
-
-    return payload;
-  };
-
-  const onBuildPlan = async () => {
-    if (!walletAddress || selectedTokens.length === 0) {
-      return;
-    }
-
-    void hapticImpact('light');
-    setState('building');
-    setError(null);
-
-    try {
-      const nextPlan = await buildPlan();
-      setPlan(nextPlan);
-      if (nextPlan.skippedTokens.length > 0) {
-        setSelected((current) => {
-          const next = { ...current };
-          for (const skipped of nextPlan.skippedTokens) {
-            next[skipped.address] = false;
-          }
-          return next;
-        });
-      }
-      setState('ready');
-      void hapticNotification('success');
-    } catch (buildError) {
-      const formatted = formatApiError(
-        buildError instanceof Error
-          ? buildError.message
-          : 'Failed to build sweep',
-      );
-      setError(formatted);
-      setFailureLabel(shortErrorLabel(formatted));
-      setState('ready');
-    }
-  };
-
   const onSweep = async () => {
     if (!isInstalled) {
       setError({
@@ -260,9 +306,9 @@ export function Sweep() {
 
     if (!plan || plan.quotes.length === 0) {
       setError({
-        title: 'Preview required',
+        title: 'No swappable tokens',
         message:
-          'Tap Preview Forage first. Only tokens with verified liquidity and a simulated swap route are included.',
+          'None of the selected tokens have a verified route to WLD. Try rescannning or deselecting tokens without liquidity.',
       });
       return;
     }
@@ -273,7 +319,7 @@ export function Sweep() {
     setError(null);
 
     try {
-      setState('building');
+      setIsQuoting(true);
       const activePlan = await buildPlan();
 
       if (activePlan.quotes.length === 0) {
@@ -284,6 +330,7 @@ export function Sweep() {
 
       setPlan(activePlan);
       setState('pending');
+      setIsQuoting(false);
       lastRecordedPlanRef.current = activePlan;
 
       const result = await MiniKit.sendTransaction({
@@ -291,17 +338,22 @@ export function Sweep() {
         transactions: activePlan.transactions,
       });
 
-      if (!result.data?.userOpHash) {
+      const opHash =
+        (result as { data?: { userOpHash?: string } }).data?.userOpHash ??
+        (result as { userOpHash?: string }).userOpHash;
+
+      if (!opHash) {
         throw new Error('No userOpHash returned');
       }
 
-      lastUserOpHashRef.current = result.data.userOpHash;
-      setUserOpHash(result.data.userOpHash);
+      lastUserOpHashRef.current = opHash;
+      setUserOpHash(opHash);
     } catch (sweepError) {
       console.error('Sweep error payload:', sweepError);
       void hapticNotification('error');
       setButtonState('failed');
       setState('ready');
+      setIsQuoting(false);
       const formatted = formatMiniKitError(sweepError);
       setError(formatted);
       setFailureLabel(shortErrorLabel(formatted));
@@ -309,143 +361,141 @@ export function Sweep() {
     }
   };
 
+  const canForage = Boolean(plan && plan.quotes.length > 0);
+
   return (
-    <div className="flex w-full min-w-0 flex-col gap-4 overflow-x-hidden">
-      <p className="forager-subtitle text-sm">{APP_TAGLINE}</p>
+    <div className="flex h-full min-h-0 flex-1 flex-col">
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
+        <p className="forager-subtitle shrink-0 text-sm">{APP_TAGLINE}</p>
 
-      {!isInstalled && (
-        <p className="forager-card rounded-xl px-4 py-3 text-sm font-medium">
-          Open this mini app inside World App to scan your wallet and forage
-          tokens.
-        </p>
-      )}
-
-      {error && (
-        <ErrorBanner error={error} onDismiss={() => setError(null)} />
-      )}
-
-      <div className="flex flex-wrap gap-2">
-        <ForagerButton
-          onClick={() => {
-            void hapticImpact('light');
-            void loadTokens();
-          }}
-          disabled={!walletAddress || state === 'loading-tokens'}
-          variant="ghost"
-          size="sm"
-        >
-          {state === 'loading-tokens' ? 'Scanning...' : 'Rescan Wallet'}
-        </ForagerButton>
-        <ForagerButton
-          onClick={() => void onBuildPlan()}
-          disabled={selectedTokens.length === 0 || state === 'building'}
-          variant="secondary"
-          size="sm"
-        >
-          {state === 'building' ? 'Quoting...' : 'Preview Forage'}
-        </ForagerButton>
-      </div>
-
-      <div className="forager-scroll flex max-h-[50dvh] min-w-0 flex-col gap-2">
-        {tokens.length === 0 && state !== 'loading-tokens' ? (
-          <p className="forager-subtitle text-sm">
-            No forageable tokens found. WLD, WETH, USDC, WBTC, and staked Re
-            tokens are excluded.
+        {!isInstalled && (
+          <p className="forager-card shrink-0 rounded-xl px-4 py-3 text-sm font-medium">
+            Open this mini app inside World App to scan your wallet and forage
+            tokens.
           </p>
-        ) : (
-          tokens.map((token) => (
-            <label
-              key={token.address}
-              className="forager-card flex min-w-0 items-center justify-between gap-2 rounded-xl px-4 py-3"
-            >
-              <div className="flex min-w-0 items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={Boolean(selected[token.address])}
-                  onChange={(event) => {
-                    void hapticSelection();
-                    setPlan(null);
-                    setSelected((current) => ({
-                      ...current,
-                      [token.address]: event.target.checked,
-                    }));
-                  }}
-                />
-                <TokenIcon
-                  address={token.address}
-                  symbol={token.symbol}
-                  logoUrl={token.logoUrl}
-                />
-                <div className="min-w-0">
-                  <p className="truncate font-bold">{token.symbol}</p>
-                  <p className="truncate text-xs opacity-80">{token.name}</p>
-                </div>
-              </div>
-              <p className="shrink-0 text-sm font-bold">{token.balanceFormatted}</p>
-            </label>
-          ))
         )}
-      </div>
 
-      {plan && (
-        <div className="forager-card rounded-xl p-4 text-sm">
-          <div className="mb-2 flex items-center gap-2">
-            <PixelIcon name="swap" size={20} variant="light" />
-            <p className="forager-title font-semibold">Forage preview</p>
+        {error && (
+          <ErrorBanner error={error} onDismiss={() => setError(null)} />
+        )}
+
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <ForagerButton
+            onClick={() => {
+              void hapticImpact('light');
+              void loadTokens();
+            }}
+            disabled={!walletAddress || state === 'loading-tokens'}
+            variant="ghost"
+            size="sm"
+          >
+            {state === 'loading-tokens' ? 'Scanning...' : 'Rescan Wallet'}
+          </ForagerButton>
+          {isQuoting ? (
+            <span className="forager-subtitle text-xs">Building preview...</span>
+          ) : null}
+        </div>
+
+        <div className="forager-scroll min-h-0 flex-1 space-y-3 pb-2">
+          <div className="space-y-1.5">
+            {tokens.length === 0 && state !== 'loading-tokens' ? (
+              <p className="forager-subtitle text-sm">
+                No forageable tokens found. WLD, WETH, USDC, WBTC, and staked Re
+                tokens are excluded.
+              </p>
+            ) : (
+              tokens.map((token) => (
+                <label
+                  key={token.address}
+                  className="forager-card flex min-w-0 items-center gap-2.5 rounded-2xl px-3 py-2"
+                >
+                  <input
+                    type="checkbox"
+                    checked={Boolean(selected[token.address])}
+                    className="h-4 w-4 shrink-0 accent-forager-purple"
+                    onChange={(event) => {
+                      void hapticSelection();
+                      lastPreviewedKeyRef.current = '';
+                      setPlan(null);
+                      setSelected((current) => ({
+                        ...current,
+                        [token.address]: event.target.checked,
+                      }));
+                    }}
+                  />
+                  <TokenIcon
+                    size="sm"
+                    address={token.address}
+                    symbol={token.symbol}
+                    logoUrl={token.logoUrl}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold leading-tight">
+                      {token.symbol}
+                    </p>
+                    <p className="truncate text-[11px] leading-tight text-forager-text-muted">
+                      {token.name}
+                    </p>
+                  </div>
+                  <p className="shrink-0 text-xs font-semibold tabular-nums text-forager-purple">
+                    {token.balanceFormatted}
+                  </p>
+                </label>
+              ))
+            )}
           </div>
-          <p>Swapping {plan.quotes.length} verified token(s)</p>
-          <p>Estimated WLD (min): {formatWld(plan.estimatedWldTotal)}</p>
-          <p>Platform fee (5%): {formatWld(plan.platformFeeWld)}</p>
-          <p>You receive (min): {formatWld(plan.userReceivesWld)}</p>
-          <ul className="mt-3 space-y-1">
-            {plan.quotes.map((quote) => (
-              <li key={quote.tokenAddress} className="forager-subtitle">
-                {quote.symbol}: {quote.routeLabel}
-              </li>
-            ))}
-          </ul>
-          {plan.skippedTokens.length > 0 && (
-            <div className="mt-3 border-t border-forager-border pt-3 forager-subtitle">
-              <p className="font-medium">Skipped tokens</p>
-              <ul className="mt-1 space-y-1">
-                {plan.skippedTokens.map((token) => (
-                  <li key={token.address}>
-                    {token.symbol}: {token.reason}
-                  </li>
-                ))}
-              </ul>
+
+          {plan && (
+            <div className="forager-card rounded-xl p-3 text-sm">
+              <div className="mb-2 flex items-center gap-2">
+                <PixelIcon name="swap" size={18} variant="light" />
+                <p className="forager-title text-sm font-semibold">Forage preview</p>
+              </div>
+              <p>Swapping {plan.quotes.length} verified token(s)</p>
+              <p>You receive (min): {formatWld(plan.userReceivesWld)}</p>
+              {plan.skippedTokens.length > 0 && (
+                <p className="forager-subtitle mt-2 text-xs">
+                  {plan.skippedTokens.length} token(s) skipped (no route or not
+                  allowlisted)
+                </p>
+              )}
             </div>
           )}
         </div>
-      )}
+      </div>
 
-      <LiveFeedback
-        label={{
-          failed: failureLabel,
-          pending: isConfirming ? 'Confirming...' : 'Forage pending',
-          success: 'Forage successful',
-        }}
-        state={buttonState}
-        className="w-full"
-      >
-        <ForagerButton
-          onClick={() => void onSweep()}
-          disabled={
-            !plan ||
-            plan.quotes.length === 0 ||
-            selectedTokens.length === 0 ||
-            isConfirming ||
-            state === 'loading-tokens' ||
-            state === 'building' ||
-            state === 'pending'
-          }
-          size="lg"
-          variant="primary"
+      <div className="forager-action-bar shrink-0 px-0 pb-1 pt-3">
+        <LiveFeedback
+          label={{
+            failed: failureLabel,
+            pending: isConfirming ? 'Confirming...' : 'Forage pending',
+            success: 'Forage successful',
+          }}
+          state={buttonState}
           className="w-full"
         >
-          {plan ? 'Forage to WLD' : 'Preview required before foraging'}
-        </ForagerButton>
-      </LiveFeedback>
+          <ForagerButton
+            onClick={() => void onSweep()}
+            disabled={
+              !canForage ||
+              selectedTokens.length === 0 ||
+              isConfirming ||
+              state === 'loading-tokens' ||
+              isQuoting ||
+              state === 'pending'
+            }
+            size="lg"
+            variant="primary"
+            className="w-full"
+          >
+            {isQuoting
+              ? 'Building preview...'
+              : canForage
+                ? 'Forage to WLD'
+                : 'No swappable tokens selected'}
+          </ForagerButton>
+        </LiveFeedback>
+      </div>
     </div>
   );
 }

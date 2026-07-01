@@ -1,5 +1,6 @@
 'use client';
 
+import { LeaderboardPanel } from '@/components/Leaderboard';
 import {
   formatWldAmount,
   shortenAddress,
@@ -50,7 +51,7 @@ export function ProfileStats() {
 
       <div className="grid grid-cols-2 gap-2">
         <StatCard
-          label="Your WLD reclaimed"
+          label="WLD reclaimed"
           value={
             loading
               ? '…'
@@ -58,25 +59,13 @@ export function ProfileStats() {
           }
         />
         <StatCard
-          label="Leaderboard rank"
+          label="Rank"
           value={
             loading
               ? '…'
               : data?.userRankPosition
                 ? `#${data.userRankPosition}`
                 : 'Unranked'
-          }
-        />
-        <StatCard
-          label="Your forages"
-          value={loading ? '…' : String(data?.userRank?.forageCount ?? 0)}
-        />
-        <StatCard
-          label="Global reclaimed"
-          value={
-            loading
-              ? '…'
-              : `${formatWldAmount(data?.stats.totalWldReclaimed ?? 0)} WLD`
           }
         />
       </div>
@@ -87,6 +76,8 @@ export function ProfileStats() {
           leaderboard.
         </p>
       ) : null}
+
+      <LeaderboardPanel compact />
     </div>
   );
 }

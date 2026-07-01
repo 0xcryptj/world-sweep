@@ -1,5 +1,4 @@
 import { APP_LOGO_SRC, APP_NAME } from '@/lib/branding';
-import Image from 'next/image';
 
 type AppLogoProps = {
   size?: 'sm' | 'md' | 'lg';
@@ -16,15 +15,16 @@ export function AppLogo({ size = 'md', className = '' }: AppLogoProps) {
   const dimension = sizeMap[size];
 
   return (
-    <div className={`relative shrink-0 overflow-hidden ${className}`}>
-      <Image
-        src={APP_LOGO_SRC}
-        alt={`${APP_NAME} logo`}
-        width={dimension}
-        height={dimension}
-        className="object-contain mix-blend-lighten"
-        priority={size === 'lg'}
-      />
-    </div>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={APP_LOGO_SRC}
+      alt={`${APP_NAME} logo`}
+      width={dimension}
+      height={dimension}
+      className={`shrink-0 object-contain ${className}`}
+      style={{ background: 'transparent' }}
+      decoding="async"
+      fetchPriority={size === 'lg' ? 'high' : 'auto'}
+    />
   );
 }

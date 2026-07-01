@@ -1,8 +1,8 @@
+import { formatUnitsCapped } from './format-balance';
 import {
   decodeErrorResult,
   encodeFunctionData,
   encodePacked,
-  formatUnits,
   getAddress,
   type Address,
   type Hex,
@@ -26,6 +26,23 @@ import { isPermit2Allowlisted } from './allowlist';
 import { publicClient } from './tokens';
 import { isStakedYieldToken } from './token-filters';
 import type { BuildSweepResponse, SweepQuote, WalletToken } from './types';
+
+const MAX_UINT160 = (BigInt(1) << BigInt(160)) - BigInt(1);
+
+function toUint160(amount: bigint): bigint {
+  if (amount > MAX_UINT160) {
+    throw new Error('Token amount exceeds Permit2 limit');
+  }
+  return amount;
+}
+
+function asCalldataTx(to: Address, data: Hex) {
+  return {
+    to,
+    data,
+    value: '0x0' as const,
+  };
+}
 
 type RouteHop = {
   tokenIn: Address;
@@ -243,9 +260,9 @@ function buildSwapTransaction({
 }) {
   if (route.hops.length === 1) {
     const hop = route.hops[0];
-    return {
-      to: UNISWAP_V3_SWAP_ROUTER,
-      data: encodeFunctionData({
+    return asCalldataTx(
+      UNISWAP_V3_SWAP_ROUTER,
+      encodeFunctionData({
         abi: swapRouterAbi,
         functionName: 'exactInputSingle',
         args: [
@@ -261,12 +278,12 @@ function buildSwapTransaction({
           },
         ],
       }),
-    };
+    );
   }
 
-  return {
-    to: UNISWAP_V3_SWAP_ROUTER,
-    data: encodeFunctionData({
+  return asCalldataTx(
+    UNISWAP_V3_SWAP_ROUTER,
+    encodeFunctionData({
       abi: swapRouterAbi,
       functionName: 'exactInput',
       args: [
@@ -279,18 +296,29 @@ function buildSwapTransaction({
         },
       ],
     }),
-  };
+  );
 }
 
 function buildPermit2Approval(token: Address, amount: bigint) {
-  return {
-    to: PERMIT2_ADDRESS,
-    data: encodeFunctionData({
+  return asCalldataTx(
+    PERMIT2_ADDRESS,
+    encodeFunctionData({
       abi: permit2Abi,
       functionName: 'approve',
-      args: [token, UNISWAP_V3_SWAP_ROUTER, amount, 0],
+      args: [token, UNISWAP_V3_SWAP_ROUTER, toUint160(amount), 0],
     }),
-  };
+  );
+}
+
+function buildErc20ApprovePermit2(token: Address, amount: bigint) {
+  return asCalldataTx(
+    token,
+    encodeFunctionData({
+      abi: erc20Abi,
+      functionName: 'approve',
+      args: [PERMIT2_ADDRESS, amount],
+    }),
+  );
 }
 
 export async function buildSweepPlan({
@@ -371,6 +399,7 @@ export async function buildSweepPlan({
     });
 
     transactions.push(
+      buildErc20ApprovePermit2(getAddress(token.address), amountIn),
       buildPermit2Approval(getAddress(token.address), amountIn),
       buildSwapTransaction({
         route,
@@ -393,14 +422,16 @@ export async function buildSweepPlan({
   const userReceivesWld = estimatedWldTotal - platformFeeWld;
 
   if (platformFeeWld > BigInt(0)) {
-    transactions.push({
-      to: WLD_ADDRESS,
-      data: encodeFunctionData({
-        abi: erc20Abi,
-        functionName: 'transfer',
-        args: [feeWallet, platformFeeWld],
-      }),
-    });
+    transactions.push(
+      asCalldataTx(
+        WLD_ADDRESS,
+        encodeFunctionData({
+          abi: erc20Abi,
+          functionName: 'transfer',
+          args: [feeWallet, platformFeeWld],
+        }),
+      ),
+    );
   }
 
   return {
@@ -414,5 +445,5 @@ export async function buildSweepPlan({
 }
 
 export function formatWld(amount: string): string {
-  return `${formatUnits(BigInt(amount), 18)} WLD`;
+  return `${formatUnitsCapped(BigInt(amount), 18)} WLD`;
 }

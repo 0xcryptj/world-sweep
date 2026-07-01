@@ -8,13 +8,13 @@ export default async function HomePage() {
 
   return (
     <>
-      <Page.Header className="p-0">
+      <Page.Header className="shrink-0 p-0">
         <AppHeader
           username={session?.user?.username}
           profilePictureUrl={session?.user?.profilePictureUrl}
         />
       </Page.Header>
-      <Page.Main className="mb-16 flex flex-col items-stretch justify-start gap-4">
+      <Page.Main className="flex min-h-0 flex-1 flex-col overflow-hidden p-6 pt-3 pb-0">
         <Sweep />
       </Page.Main>
     </>

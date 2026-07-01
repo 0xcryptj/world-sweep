@@ -16,9 +16,11 @@ export default async function TabsLayout({
   }
 
   return (
-    <Page>
-      {children}
-      <Page.Footer className="fixed bottom-0 z-30 w-full px-0">
+    <Page className="h-dvh">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        {children}
+      </div>
+      <Page.Footer className="w-full shrink-0 px-0">
         <Navigation />
       </Page.Footer>
     </Page>

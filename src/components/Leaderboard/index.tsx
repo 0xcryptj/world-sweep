@@ -8,7 +8,11 @@ import {
 import { Marble } from '@worldcoin/mini-apps-ui-kit-react';
 import { useEffect, useState } from 'react';
 
-export function LeaderboardPanel() {
+type LeaderboardPanelProps = {
+  compact?: boolean;
+};
+
+export function LeaderboardPanel({ compact = false }: LeaderboardPanelProps) {
   const [data, setData] = useState<LeaderboardResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -40,7 +44,7 @@ export function LeaderboardPanel() {
 
   if (loading) {
     return (
-      <p className="forager-subtitle text-sm">Loading reclaimed WLD stats...</p>
+      <p className="forager-subtitle text-sm">Loading leaderboard...</p>
     );
   }
 
@@ -54,20 +58,27 @@ export function LeaderboardPanel() {
 
   return (
     <div className="flex w-full flex-col gap-4">
-      <div className="grid grid-cols-3 gap-2">
-        <MetricCard
-          label="WLD reclaimed"
-          value={`${formatWldAmount(data.stats.totalWldReclaimed)} WLD`}
-        />
-        <MetricCard
-          label="Forages"
-          value={String(data.stats.totalForages)}
-        />
-        <MetricCard
-          label="Foragers"
-          value={String(data.stats.totalForagers)}
-        />
-      </div>
+      {!compact ? (
+        <div className="grid grid-cols-3 gap-2">
+          <MetricCard
+            label="WLD reclaimed"
+            value={`${formatWldAmount(data.stats.totalWldReclaimed)} WLD`}
+          />
+          <MetricCard
+            label="Forages"
+            value={String(data.stats.totalForages)}
+          />
+          <MetricCard
+            label="Foragers"
+            value={String(data.stats.totalForagers)}
+          />
+        </div>
+      ) : (
+        <p className="forager-subtitle text-xs">
+          {formatWldAmount(data.stats.totalWldReclaimed)} WLD reclaimed globally
+          · {data.stats.totalForagers} foragers
+        </p>
+      )}
 
       <div className="forager-card rounded-2xl p-4">
         <p className="forager-title mb-3 text-base font-semibold">
@@ -101,7 +112,8 @@ export function LeaderboardPanel() {
                       {entry.username ?? shortenAddress(entry.walletAddress)}
                     </p>
                     <p className="forager-subtitle text-xs">
-                      {entry.forageCount} forage{entry.forageCount === 1 ? '' : 's'}
+                      {entry.forageCount} forage
+                      {entry.forageCount === 1 ? '' : 's'}
                     </p>
                   </div>
                 </div>

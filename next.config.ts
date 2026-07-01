@@ -5,7 +5,12 @@ const allowedDevOrigins = authUrl ? [new URL(authUrl).host] : [];
 
 const nextConfig: NextConfig = {
   images: {
-    domains: ['static.usernames.app-backend.toolsforhumanity.com'],
+    domains: [
+      'static.usernames.app-backend.toolsforhumanity.com',
+      'static.alchemyapi.io',
+      'assets.smold.app',
+      'raw.githubusercontent.com',
+    ],
   },
   allowedDevOrigins,
   reactStrictMode: false,

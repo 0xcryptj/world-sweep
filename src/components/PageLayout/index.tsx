@@ -48,7 +48,12 @@ const Main = (props: { children: ReactNode; className?: string }) => {
 
 const Footer = (props: { children: ReactNode; className?: string }) => {
   return (
-    <footer className={twMerge('forager-footer px-6 pb-[35px]', clsx(props.className))}>
+    <footer
+      className={twMerge(
+        'forager-footer px-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1',
+        clsx(props.className),
+      )}
+    >
       {props.children}
     </footer>
   );

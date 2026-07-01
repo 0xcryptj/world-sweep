@@ -4,14 +4,16 @@
   --background: #111111;
   --foreground: #ffffff;
   --forager-bg: #111111;
-  --forager-bg-elevated: #1a1a1a;
-  --forager-surface: #252525;
-  --forager-surface-hover: #2d2d2d;
+  --forager-bg-elevated: #161616;
+  --forager-surface: #1a1a1a;
+  --forager-surface-hover: #222222;
   --forager-purple: #ab9ff2;
   --forager-purple-bright: #c4b5fd;
   --forager-purple-dark: #7c3aed;
   --forager-text-muted: #9ca3af;
-  --forager-border: #333333;
+  --forager-border: #2a2a2a;
+  --forager-nav-height: 3.25rem;
+  --forager-action-height: 4.25rem;
 }
 
 @theme inline {
@@ -44,12 +46,12 @@ body {
 }
 
 .forager-header {
-  background: var(--forager-bg-elevated);
+  background: var(--forager-bg);
   border-bottom: 1px solid var(--forager-border);
 }
 
 .forager-footer {
-  background: var(--forager-bg-elevated);
+  background: var(--forager-bg);
   border-top: 1px solid var(--forager-border);
 }
 
@@ -94,7 +96,7 @@ body {
 
 .forager-btn:disabled {
   cursor: not-allowed;
-  opacity: 0.45;
+  opacity: 0.6;
 }
 
 .forager-btn:not(:disabled):active {
@@ -223,4 +225,9 @@ body {
 
 .splash-dot-3 {
   animation-delay: 0.3s;
+}
+
+.forager-action-bar {
+  background: var(--forager-bg);
+  border-top: 1px solid var(--forager-border);
 }

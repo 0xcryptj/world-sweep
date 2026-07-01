@@ -1,6 +1,6 @@
+import { formatUnitsCapped } from './format-balance';
 import {
   createPublicClient,
-  formatUnits,
   getAddress,
   http,
   isAddress,
@@ -8,7 +8,7 @@ import {
 } from 'viem';
 import { worldchain } from 'viem/chains';
 import { erc20Abi } from './abis';
-import { RPC_URL } from './constants';
+import { PROTECTED_TOKEN_ADDRESSES, RPC_URL, WLD_ADDRESS } from './constants';
 import { isForageableToken } from './token-filters';
 import type { WalletToken } from './types';
 
@@ -64,7 +64,7 @@ async function alchemyRpc<T>(method: string, params: unknown[]): Promise<T> {
   return payload.result as T;
 }
 
-async function fetchAlchemyTokenMetadata(
+export async function fetchAlchemyTokenMetadata(
   address: string,
 ): Promise<AlchemyTokenMetadata | null> {
   try {
@@ -112,6 +112,39 @@ async function readOnChainMetadata(address: Address): Promise<{
 export async function fetchWalletTokens(
   walletAddress: string,
 ): Promise<WalletToken[]> {
+  const tokens = await fetchAllWalletTokens(walletAddress);
+  return tokens.filter(isForageableToken);
+}
+
+function sortWalletHoldings(tokens: WalletToken[]): WalletToken[] {
+  const wld = WLD_ADDRESS.toLowerCase();
+
+  return [...tokens].sort((a, b) => {
+    const aAddress = a.address.toLowerCase();
+    const bAddress = b.address.toLowerCase();
+
+    if (aAddress === wld) return -1;
+    if (bAddress === wld) return 1;
+
+    const aProtected = PROTECTED_TOKEN_ADDRESSES.has(aAddress);
+    const bProtected = PROTECTED_TOKEN_ADDRESSES.has(bAddress);
+    if (aProtected !== bProtected) {
+      return aProtected ? -1 : 1;
+    }
+
+    const aBalance = BigInt(a.balance);
+    const bBalance = BigInt(b.balance);
+    if (aBalance === bBalance) {
+      return a.symbol.localeCompare(b.symbol);
+    }
+
+    return aBalance > bBalance ? -1 : 1;
+  });
+}
+
+export async function fetchAllWalletTokens(
+  walletAddress: string,
+): Promise<WalletToken[]> {
   if (!isAddress(walletAddress)) {
     throw new Error('Invalid wallet address');
   }
@@ -131,15 +164,14 @@ export async function fetchWalletTokens(
         name: 'Unknown Token',
         decimals: 18,
         balance: balance.toString(),
-        balanceFormatted: formatUnits(balance, 18),
+        balanceFormatted: formatUnitsCapped(balance, 18),
       } satisfies WalletToken;
     })
-    .filter((token) => token.balance !== '0')
-    .sort((a, b) => Number(b.balance) - Number(a.balance));
+    .filter((token) => token.balance !== '0');
 
   const enriched = await enrichTokenMetadata(tokens);
 
-  return enriched.filter(isForageableToken);
+  return sortWalletHoldings(enriched);
 }
 
 export async function enrichTokenMetadata(
@@ -161,7 +193,7 @@ export async function enrichTokenMetadata(
         alchemy?.name?.trim() || onChain.name?.trim() || token.name;
       const decimals =
         alchemy?.decimals ?? onChain.decimals ?? token.decimals;
-      const logoUrl = alchemy?.logo ?? null;
+      const logoUrl = alchemy?.logo?.trim() || null;
 
       return {
         ...token,
@@ -169,7 +201,7 @@ export async function enrichTokenMetadata(
         name,
         decimals,
         logoUrl,
-        balanceFormatted: formatUnits(BigInt(token.balance), decimals),
+        balanceFormatted: formatUnitsCapped(BigInt(token.balance), decimals),
       };
     }),
   );

@@ -39,7 +39,7 @@ export const FEE_TIERS = [500, 3000, 10_000] as const;
 
 export const SLIPPAGE_BPS = 300; // 3%
 
-export const MAX_TOKENS_PER_SWEEP = 10;
+export const MAX_TOKENS_PER_SWEEP = 4;
 
 /** Minimum quoted WLD output (wei) for a swap to be included. */
 export const MIN_WLD_OUT_WEI = BigInt('1000000000000'); // 0.000001 WLD

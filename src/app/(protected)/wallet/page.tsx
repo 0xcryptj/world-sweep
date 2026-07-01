@@ -1,7 +1,7 @@
 import { auth } from '@/auth';
 import { AppHeader } from '@/components/AppHeader';
-import { LeaderboardPanel } from '@/components/Leaderboard';
 import { Page } from '@/components/PageLayout';
+import { WalletPanel } from '@/components/WalletPanel';
 
 export default async function WalletPage() {
   const session = await auth();
@@ -10,14 +10,14 @@ export default async function WalletPage() {
     <>
       <Page.Header className="p-0">
         <AppHeader
-          title="Leaderboard"
-          subtitle="WLD reclaimed across Forager"
+          title="Wallet"
+          subtitle="Your World Chain balances"
           username={session?.user?.username}
           profilePictureUrl={session?.user?.profilePictureUrl}
         />
       </Page.Header>
-      <Page.Main className="mb-16 flex flex-col items-stretch justify-start gap-4">
-        <LeaderboardPanel />
+      <Page.Main className="flex flex-col items-stretch justify-start gap-4 pb-4">
+        <WalletPanel />
       </Page.Main>
     </>
   );
