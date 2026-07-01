@@ -7,6 +7,12 @@ export const RPC_URL =
 export const WLD_ADDRESS =
   '0x2cFc85d8E48F8EAB294be644d9E25C3030863003' as const;
 
+export const WETH_ADDRESS =
+  '0x4200000000000000000000000000000000000006' as const;
+
+export const USDC_ADDRESS =
+  '0x79a02482a880bce3f13e09da970dc34db4cd24d1' as const;
+
 export const PROTECTED_TOKEN_ADDRESSES = new Set([
   WLD_ADDRESS.toLowerCase(),
   '0x4200000000000000000000000000000000000006', // WETH
@@ -34,3 +40,6 @@ export const FEE_TIERS = [500, 3000, 10_000] as const;
 export const SLIPPAGE_BPS = 300; // 3%
 
 export const MAX_TOKENS_PER_SWEEP = 10;
+
+/** Minimum quoted WLD output (wei) for a swap to be included. */
+export const MIN_WLD_OUT_WEI = BigInt('1000000000000'); // 0.000001 WLD

@@ -1,4 +1,5 @@
 import { buildSweepPlan } from '@/lib/sweep';
+import { isForageableToken } from '@/lib/token-filters';
 import type { WalletToken } from '@/lib/types';
 import { NextResponse } from 'next/server';
 
@@ -20,13 +21,16 @@ export async function POST(request: Request) {
 
     const plan = await buildSweepPlan({
       walletAddress: body.walletAddress,
-      tokens: body.tokens,
+      tokens: body.tokens.filter(isForageableToken),
     });
 
     return NextResponse.json(plan);
   } catch (error) {
     const message =
       error instanceof Error ? error.message : 'Failed to build sweep plan';
-    return NextResponse.json({ error: message }, { status: 500 });
+    const status = message.includes('No selected tokens have a swappable route')
+      ? 422
+      : 500;
+    return NextResponse.json({ error: message }, { status });
   }
 }

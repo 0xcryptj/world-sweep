@@ -5,6 +5,7 @@ export type WalletToken = {
   decimals: number;
   balance: string;
   balanceFormatted: string;
+  logoUrl?: string | null;
 };
 
 export type SweepQuote = {
@@ -14,6 +15,7 @@ export type SweepQuote = {
   estimatedWldOut: string;
   minWldOut: string;
   feeTier: number;
+  routeLabel: string;
 };
 
 export type SweepTransaction = {

@@ -1,11 +1,11 @@
-# World Sweep
+# Forager
 
 A World App mini app that lets users sell junk mini-app tokens from their World Chain wallet in **one batched transaction** and receive native **WLD**. The app takes a **5% platform fee** on the WLD received from swaps.
 
 ## What it does
 
 1. Authenticates the user with World App wallet auth (MiniKit)
-2. Scans the wallet for ERC-20 balances (via Etherscan API v2 for World Chain)
+2. Scans the wallet for ERC-20 balances (via Alchemy Token API on World Chain)
 3. Excludes protected assets (WLD, WETH, USDC, WBTC)
 4. Quotes Uniswap V3 routes to WLD for each selected token
 5. Builds a single atomic `sendTransaction` batch:
@@ -30,7 +30,8 @@ Copy `.env.sample` to `.env.local` and fill in:
 | `AUTH_URL` | Your ngrok or production URL |
 | `NEXT_PUBLIC_APP_ID` | App ID from [developer.worldcoin.org](https://developer.worldcoin.org) |
 | `NEXT_PUBLIC_PLATFORM_FEE_WALLET` | Your World wallet address for the 5% fee |
-| `ETHERSCAN_API_KEY` | Free API key from [etherscan.io](https://etherscan.io) (used for World Chain via API v2) |
+| `ALCHEMY_API_KEY` | Free API key from [alchemy.com](https://www.alchemy.com) (World Chain token balances) |
+| `NEXT_PUBLIC_WORLDCHAIN_RPC_URL` | Optional; defaults to Alchemy public RPC. Use `https://worldchain-mainnet.g.alchemy.com/v2/YOUR_KEY` with the same key |
 
 ### 3. Developer Portal setup
 
@@ -47,10 +48,10 @@ In [developer.worldcoin.org](https://developer.worldcoin.org) → your mini app 
 
 ```bash
 npm run dev
-ngrok http 3000
+cloudflared tunnel --url http://localhost:3000
 ```
 
-Point your mini app URL in the Developer Portal to your ngrok URL.
+Point your mini app URL in the Developer Portal to your Cloudflare tunnel URL (or ngrok if you prefer).
 
 ### 5. Test in World App
 

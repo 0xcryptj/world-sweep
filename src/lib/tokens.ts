@@ -8,11 +8,8 @@ import {
 } from 'viem';
 import { worldchain } from 'viem/chains';
 import { erc20Abi } from './abis';
-import {
-  PROTECTED_TOKEN_ADDRESSES,
-  RPC_URL,
-  WLD_ADDRESS,
-} from './constants';
+import { RPC_URL } from './constants';
+import { isForageableToken } from './token-filters';
 import type { WalletToken } from './types';
 
 const client = createPublicClient({
@@ -20,13 +17,97 @@ const client = createPublicClient({
   transport: http(RPC_URL),
 });
 
-type EtherscanToken = {
+type AlchemyTokenBalance = {
   contractAddress: string;
-  tokenSymbol: string;
-  tokenName: string;
-  tokenDecimal: string;
-  balance: string;
+  tokenBalance: string;
 };
+
+type AlchemyTokenMetadata = {
+  name?: string | null;
+  symbol?: string | null;
+  decimals?: number | null;
+  logo?: string | null;
+};
+
+async function alchemyRpc<T>(method: string, params: unknown[]): Promise<T> {
+  const apiKey = process.env.ALCHEMY_API_KEY;
+  if (!apiKey) {
+    throw new Error(
+      'ALCHEMY_API_KEY is not configured. Create a free key at alchemy.com (World Chain supported).',
+    );
+  }
+
+  const response = await fetch(
+    `https://worldchain-mainnet.g.alchemy.com/v2/${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method,
+        params,
+      }),
+      next: { revalidate: method === 'alchemy_getTokenMetadata' ? 3600 : 30 },
+    },
+  );
+
+  const payload = (await response.json()) as {
+    error?: { message: string };
+    result?: T;
+  };
+
+  if (payload.error) {
+    throw new Error(payload.error.message || `Alchemy ${method} failed`);
+  }
+
+  return payload.result as T;
+}
+
+async function fetchAlchemyTokenMetadata(
+  address: string,
+): Promise<AlchemyTokenMetadata | null> {
+  try {
+    return await alchemyRpc<AlchemyTokenMetadata>(
+      'alchemy_getTokenMetadata',
+      [address],
+    );
+  } catch {
+    return null;
+  }
+}
+
+async function readOnChainMetadata(address: Address): Promise<{
+  symbol?: string;
+  name?: string;
+  decimals?: number;
+}> {
+  const results = await Promise.allSettled([
+    client.readContract({
+      address,
+      abi: erc20Abi,
+      functionName: 'symbol',
+    }),
+    client.readContract({
+      address,
+      abi: erc20Abi,
+      functionName: 'name',
+    }),
+    client.readContract({
+      address,
+      abi: erc20Abi,
+      functionName: 'decimals',
+    }),
+  ]);
+
+  return {
+    symbol:
+      results[0].status === 'fulfilled' ? String(results[0].value) : undefined,
+    name: results[1].status === 'fulfilled' ? String(results[1].value) : undefined,
+    decimals:
+      results[2].status === 'fulfilled' ? Number(results[2].value) : undefined,
+  };
+}
 
 export async function fetchWalletTokens(
   walletAddress: string,
@@ -35,57 +116,30 @@ export async function fetchWalletTokens(
     throw new Error('Invalid wallet address');
   }
 
-  const apiKey = process.env.ETHERSCAN_API_KEY;
-  if (!apiKey) {
-    throw new Error(
-      'ETHERSCAN_API_KEY is not configured. Add a free key from etherscan.io to scan wallet tokens.',
-    );
-  }
+  const balanceResult = await alchemyRpc<{
+    tokenBalances: AlchemyTokenBalance[];
+  }>('alchemy_getTokenBalances', [walletAddress, 'erc20']);
 
-  const url = new URL('https://api.etherscan.io/v2/api');
-  url.searchParams.set('chainid', '480');
-  url.searchParams.set('module', 'account');
-  url.searchParams.set('action', 'tokenlist');
-  url.searchParams.set('address', walletAddress);
-  url.searchParams.set('apikey', apiKey);
-
-  const response = await fetch(url, { next: { revalidate: 30 } });
-  const payload = (await response.json()) as {
-    status: string;
-    message: string;
-    result: EtherscanToken[] | string;
-  };
-
-  if (payload.status !== '1' || !Array.isArray(payload.result)) {
-    const message =
-      typeof payload.result === 'string'
-        ? payload.result
-        : payload.message || 'Failed to load wallet tokens';
-    throw new Error(message);
-  }
-
-  return payload.result
+  const tokens = balanceResult.tokenBalances
     .map((token) => {
       const address = getAddress(token.contractAddress);
-      const decimals = Number(token.tokenDecimal || 18);
-      const balance = BigInt(token.balance || '0');
+      const balance = BigInt(token.tokenBalance || '0x0');
 
       return {
         address,
-        symbol: token.tokenSymbol || 'UNKNOWN',
-        name: token.tokenName || 'Unknown Token',
-        decimals,
+        symbol: 'UNKNOWN',
+        name: 'Unknown Token',
+        decimals: 18,
         balance: balance.toString(),
-        balanceFormatted: formatUnits(balance, decimals),
+        balanceFormatted: formatUnits(balance, 18),
       } satisfies WalletToken;
     })
-    .filter(
-      (token) =>
-        token.balance !== '0' &&
-        !PROTECTED_TOKEN_ADDRESSES.has(token.address.toLowerCase()) &&
-        token.address.toLowerCase() !== WLD_ADDRESS.toLowerCase(),
-    )
+    .filter((token) => token.balance !== '0')
     .sort((a, b) => Number(b.balance) - Number(a.balance));
+
+  const enriched = await enrichTokenMetadata(tokens);
+
+  return enriched.filter(isForageableToken);
 }
 
 export async function enrichTokenMetadata(
@@ -93,35 +147,30 @@ export async function enrichTokenMetadata(
 ): Promise<WalletToken[]> {
   return Promise.all(
     tokens.map(async (token) => {
-      try {
-        const [symbol, name, decimals] = await Promise.all([
-          client.readContract({
-            address: token.address as Address,
-            abi: erc20Abi,
-            functionName: 'symbol',
-          }),
-          client.readContract({
-            address: token.address as Address,
-            abi: erc20Abi,
-            functionName: 'name',
-          }),
-          client.readContract({
-            address: token.address as Address,
-            abi: erc20Abi,
-            functionName: 'decimals',
-          }),
-        ]);
+      const address = token.address as Address;
+      const [alchemy, onChain] = await Promise.all([
+        fetchAlchemyTokenMetadata(token.address),
+        readOnChainMetadata(address),
+      ]);
 
-        return {
-          ...token,
-          symbol,
-          name,
-          decimals,
-          balanceFormatted: formatUnits(BigInt(token.balance), decimals),
-        };
-      } catch {
-        return token;
-      }
+      const symbol =
+        alchemy?.symbol?.trim() ||
+        onChain.symbol?.trim() ||
+        token.symbol;
+      const name =
+        alchemy?.name?.trim() || onChain.name?.trim() || token.name;
+      const decimals =
+        alchemy?.decimals ?? onChain.decimals ?? token.decimals;
+      const logoUrl = alchemy?.logo ?? null;
+
+      return {
+        ...token,
+        symbol,
+        name,
+        decimals,
+        logoUrl,
+        balanceFormatted: formatUnits(BigInt(token.balance), decimals),
+      };
     }),
   );
 }

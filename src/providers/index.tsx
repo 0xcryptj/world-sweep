@@ -1,4 +1,5 @@
 'use client';
+import { SplashGate } from '@/components/SplashScreen/SplashGate';
 import { MiniKitProvider } from '@worldcoin/minikit-js/minikit-provider';
 import { Session } from 'next-auth';
 import { SessionProvider } from 'next-auth/react';
@@ -35,7 +36,9 @@ export default function ClientProviders({
   return (
     <ErudaProvider>
       <MiniKitProvider>
-        <SessionProvider session={session}>{children}</SessionProvider>
+        <SplashGate>
+          <SessionProvider session={session}>{children}</SessionProvider>
+        </SplashGate>
       </MiniKitProvider>
     </ErudaProvider>
   );

@@ -21,8 +21,10 @@
 /build
 
 # misc
+.cursor/
 .DS_Store
 *.pem
+/data/forage-events.json
 
 # debug
 npm-debug.log*
