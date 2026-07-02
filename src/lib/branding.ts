@@ -4,16 +4,16 @@ export const APP_TAGLINE = 'Turn junk tokens into WLD';
 
 export const APP_LOGO_SRC = '/assets/pics/app-logo.png';
 
-/** App color palette */
+/** App color palette — mirrors CSS variables in globals.css */
 export const APP_COLORS = {
-  bg: '#111111',
-  bgElevated: '#1a1a1a',
-  surface: '#252525',
-  surfaceHover: '#2d2d2d',
+  bg: '#0e0e0e',
+  bgElevated: 'rgb(255 255 255 / 5%)',
+  surface: 'rgb(255 255 255 / 6%)',
+  surfaceHover: 'rgb(255 255 255 / 9%)',
   purple: '#ab9ff2',
   purpleBright: '#c4b5fd',
   purpleDark: '#7c3aed',
   text: '#ffffff',
   textMuted: '#9ca3af',
-  border: '#333333',
+  border: 'rgb(255 255 255 / 10%)',
 } as const;
