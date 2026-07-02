@@ -25,7 +25,7 @@ export function ErrorBanner({ error, onDismiss }: ErrorBannerProps) {
           </div>
           <p className="text-app-text-muted">{error.message}</p>
           {error.details && (
-            <p className="rounded-xl bg-app-bg-elevated px-3 py-2 text-xs text-app-text-muted">
+            <p className="app-glass-subtle rounded-xl px-3 py-2 text-xs text-app-text-muted">
               {error.details}
             </p>
           )}

@@ -125,7 +125,7 @@ export function WalletPanel() {
         <button
           type="button"
           onClick={() => void copyAddress()}
-          className="app-subtitle mt-3 flex w-full items-center justify-between gap-2 rounded-xl bg-app-bg-elevated px-3 py-2 text-left text-xs"
+          className="app-glass-subtle app-subtitle mt-3 flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-left text-xs"
         >
           <span className="truncate font-mono">{shortenAddress(walletAddress)}</span>
           <span className="shrink-0 text-app-purple">
@@ -216,7 +216,7 @@ function TokenRow({ token }: { token: WalletToken }) {
               Native
             </span>
           ) : forageable ? (
-            <span className="rounded-full bg-app-bg-elevated px-2 py-0.5 text-[10px] text-app-text-muted">
+            <span className="app-glass-subtle rounded-full px-2 py-0.5 text-[10px] text-app-text-muted">
               Forageable
             </span>
           ) : null}

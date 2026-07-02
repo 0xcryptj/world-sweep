@@ -94,7 +94,7 @@ export function LeaderboardPanel({ compact = false }: LeaderboardPanelProps) {
             {data.leaderboard.map((entry, index) => (
               <li
                 key={entry.walletAddress}
-                className="flex items-center justify-between gap-3 rounded-xl bg-app-bg-elevated px-3 py-2"
+                className="app-glass-subtle flex items-center justify-between gap-3 rounded-xl px-3 py-2"
               >
                 <div className="flex min-w-0 items-center gap-3">
                   <span className="w-5 shrink-0 text-sm font-bold text-app-purple">

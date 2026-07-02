@@ -5,22 +5,28 @@ import { APP_NAME, APP_TAGLINE } from '@/lib/branding';
 
 type SplashScreenProps = {
   visible: boolean;
+  exiting?: boolean;
 };
 
-export function SplashScreen({ visible }: SplashScreenProps) {
+export function SplashScreen({ visible, exiting = false }: SplashScreenProps) {
   return (
     <div
       aria-hidden={!visible}
-      className={`fixed inset-0 z-50 flex flex-col items-center justify-center bg-app-bg transition-opacity duration-500 ease-out ${
+      className={`splash-screen fixed inset-0 z-50 flex flex-col items-center justify-center transition-opacity duration-700 ease-in-out ${
         visible
           ? 'pointer-events-auto opacity-100'
           : 'pointer-events-none opacity-0'
       }`}
     >
-      <div className="flex flex-col items-center gap-7 px-8 text-center">
-        <div className="splash-logo-enter">
-          <div className="splash-logo-float">
-            <AppLogo size="lg" />
+      <div
+        className={`flex flex-col items-center gap-8 px-8 text-center ${exiting ? 'splash-content-exit' : ''}`}
+      >
+        <div className={`relative ${exiting ? 'splash-logo-exit' : ''}`}>
+          <div className="splash-logo-glow" aria-hidden />
+          <div className="splash-logo-enter relative z-10">
+            <div className="splash-logo-float">
+              <AppLogo size="xl" />
+            </div>
           </div>
         </div>
 

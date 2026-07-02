@@ -71,7 +71,7 @@ export function ProfileStats() {
       </div>
 
       {!loading && !data?.userRank ? (
-        <p className="app-subtitle rounded-2xl border border-app-border bg-app-bg-elevated px-4 py-3 text-sm">
+        <p className="app-glass-subtle app-subtitle rounded-2xl border border-app-border px-4 py-3 text-sm">
           Complete your first successful forage from Home to appear on the
           leaderboard.
         </p>

@@ -1,7 +1,7 @@
 import { APP_LOGO_SRC, APP_NAME } from '@/lib/branding';
 
 type AppLogoProps = {
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg' | 'xl';
   className?: string;
 };
 
@@ -9,6 +9,7 @@ const sizeMap = {
   sm: 40,
   md: 64,
   lg: 96,
+  xl: 132,
 } as const;
 
 export function AppLogo({ size = 'md', className = '' }: AppLogoProps) {
@@ -24,7 +25,7 @@ export function AppLogo({ size = 'md', className = '' }: AppLogoProps) {
       className={`shrink-0 object-contain ${className}`}
       style={{ background: 'transparent' }}
       decoding="async"
-      fetchPriority={size === 'lg' ? 'high' : 'auto'}
+      fetchPriority={size === 'lg' || size === 'xl' ? 'high' : 'auto'}
     />
   );
 }
