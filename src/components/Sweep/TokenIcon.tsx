@@ -4,6 +4,7 @@ import { PixelIcon } from '@/components/PixelIcon';
 import {
   getTokenIconSources,
   TOKEN_ICON_FALLBACK,
+  tokenIconHue,
 } from '@/lib/token-icons';
 import type { WalletToken } from '@/lib/types';
 import { useEffect, useMemo, useState } from 'react';
@@ -33,10 +34,12 @@ export function TokenIcon({
 
   const [sourceIndex, setSourceIndex] = useState(0);
   const [remoteVisible, setRemoteVisible] = useState(false);
+  const [useSymbolFallback, setUseSymbolFallback] = useState(false);
 
   useEffect(() => {
     setSourceIndex(0);
     setRemoteVisible(false);
+    setUseSymbolFallback(false);
   }, [address, logoUrl, sources]);
 
   const dimensionClass = size === 'sm' ? 'h-8 w-8' : 'h-10 w-10';
@@ -47,9 +50,17 @@ export function TokenIcon({
     setRemoteVisible(false);
     setSourceIndex((index) => {
       const next = index + 1;
-      return next < sources.length ? next : index;
+      if (next < sources.length) {
+        return next;
+      }
+
+      setUseSymbolFallback(true);
+      return index;
     });
   };
+
+  const symbolFallback = symbol.trim().slice(0, 3).toUpperCase() || '?';
+  const hue = tokenIconHue(address);
 
   return (
     <div
@@ -60,11 +71,25 @@ export function TokenIcon({
         name="coin"
         size={dimension}
         variant="light"
-        className="absolute inset-0 m-auto h-[75%] w-[75%]"
+        className={`absolute inset-0 m-auto h-[75%] w-[75%] transition-opacity duration-150 ${
+          remoteVisible || useSymbolFallback ? 'opacity-0' : 'opacity-100'
+        }`}
         alt=""
       />
 
-      {currentSource ? (
+      {useSymbolFallback ? (
+        <div
+          className="absolute inset-0 flex items-center justify-center text-[10px] font-semibold uppercase tracking-tight text-white"
+          style={{
+            backgroundColor: `hsl(${hue} 58% 42%)`,
+          }}
+          aria-hidden
+        >
+          {symbolFallback}
+        </div>
+      ) : null}
+
+      {currentSource && !useSymbolFallback ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           key={currentSource}

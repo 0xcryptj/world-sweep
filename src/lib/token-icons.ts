@@ -49,10 +49,8 @@ export function getTokenIconSources(
     sources.push(logo);
   }
 
-  sources.push(
-    `https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/worldchain/assets/${address}/logo.png`,
-    getTokenIconUrl(address),
-  );
+  // Server-side proxy tries Alchemy, GeckoTerminal, Uniswap list, and DexScreener.
+  sources.push(getTokenIconUrl(address));
 
   return [...new Set(sources)];
 }

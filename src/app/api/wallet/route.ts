@@ -1,4 +1,4 @@
-import { fetchAllWalletTokens } from '@/lib/tokens';
+import { fetchWalletTokensWithLogos } from '@/lib/wallet-tokens.server';
 import { isForageableToken } from '@/lib/token-filters';
 import { WLD_ADDRESS } from '@/lib/constants';
 import { NextResponse } from 'next/server';
@@ -15,7 +15,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const tokens = await fetchAllWalletTokens(address);
+    const tokens = await fetchWalletTokensWithLogos(address);
     const wld =
       tokens.find(
         (token) => token.address.toLowerCase() === WLD_ADDRESS.toLowerCase(),
