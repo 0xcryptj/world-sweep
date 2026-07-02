@@ -3,7 +3,7 @@ import {
   getCachedWalletScan,
   setCachedWalletScan,
 } from '@/lib/quote-cache';
-import { fetchAllWalletTokens } from '@/lib/tokens';
+import { fetchWalletTokensWithLogos } from '@/lib/wallet-tokens.server';
 import { NextResponse } from 'next/server';
 
 export async function GET(request: Request) {
@@ -26,7 +26,7 @@ export async function GET(request: Request) {
       }
     }
 
-    const holdings = await fetchAllWalletTokens(address);
+    const holdings = await fetchWalletTokensWithLogos(address);
     const { swappable, excluded } = await scanWalletForForage(holdings);
     const payload = { tokens: swappable, excluded };
 
