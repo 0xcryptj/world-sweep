@@ -11,7 +11,7 @@ type AppHeaderProps = {
 
 export function AppHeader({
   title = APP_NAME,
-  subtitle = 'Wallet forager',
+  subtitle = 'Token swap utility',
   username,
   profilePictureUrl,
 }: AppHeaderProps) {
@@ -20,8 +20,8 @@ export function AppHeader({
       <div className="flex items-center gap-3">
         <AppLogo size="sm" />
         <div>
-          <p className="forager-title text-lg font-semibold">{title}</p>
-          <p className="forager-subtitle text-xs">{subtitle}</p>
+          <p className="app-title text-lg font-semibold">{title}</p>
+          <p className="app-subtitle text-xs">{subtitle}</p>
         </div>
       </div>
       {username ? (

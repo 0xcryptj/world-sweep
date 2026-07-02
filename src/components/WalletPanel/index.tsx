@@ -1,6 +1,6 @@
 'use client';
 
-import { ForagerButton } from '@/components/ForagerButton';
+import { AppButton } from '@/components/AppButton';
 import { TokenIcon } from '@/components/Sweep/TokenIcon';
 import { shortenAddress } from '@/lib/forage-stats-types';
 import { isForageableToken } from '@/lib/token-filters';
@@ -89,46 +89,46 @@ export function WalletPanel() {
 
   if (!walletAddress) {
     return (
-      <p className="forager-subtitle text-sm">
+      <p className="app-subtitle text-sm">
         Connect your wallet in World App to view balances.
       </p>
     );
   }
 
   if (loading) {
-    return <p className="forager-subtitle text-sm">Loading wallet...</p>;
+    return <p className="app-subtitle text-sm">Loading wallet...</p>;
   }
 
   if (error || !data) {
     return (
       <div className="flex flex-col gap-3">
-        <p className="forager-subtitle text-sm">
+        <p className="app-subtitle text-sm">
           {error ?? 'Wallet unavailable right now.'}
         </p>
-        <ForagerButton variant="secondary" size="sm" onClick={() => void loadWallet()}>
+        <AppButton variant="secondary" size="sm" onClick={() => void loadWallet()}>
           Retry
-        </ForagerButton>
+        </AppButton>
       </div>
     );
   }
 
   return (
     <div className="flex w-full flex-col gap-4">
-      <div className="forager-card rounded-2xl p-4">
-        <p className="forager-subtitle text-xs uppercase tracking-wide">
+      <div className="app-card rounded-2xl p-4">
+        <p className="app-subtitle text-xs uppercase tracking-wide">
           WLD balance
         </p>
-        <p className="mt-1 text-3xl font-bold text-forager-purple">
+        <p className="mt-1 text-3xl font-bold text-app-purple">
           {data.wldBalance}
           <span className="ml-2 text-lg text-foreground">{data.wldSymbol}</span>
         </p>
         <button
           type="button"
           onClick={() => void copyAddress()}
-          className="forager-subtitle mt-3 flex w-full items-center justify-between gap-2 rounded-xl bg-forager-bg-elevated px-3 py-2 text-left text-xs"
+          className="app-subtitle mt-3 flex w-full items-center justify-between gap-2 rounded-xl bg-app-bg-elevated px-3 py-2 text-left text-xs"
         >
           <span className="truncate font-mono">{shortenAddress(walletAddress)}</span>
-          <span className="shrink-0 text-forager-purple">
+          <span className="shrink-0 text-app-purple">
             {copied ? 'Copied' : 'Copy'}
           </span>
         </button>
@@ -136,13 +136,13 @@ export function WalletPanel() {
 
       <div className="flex items-center justify-between gap-2">
         <div>
-          <p className="forager-title text-sm font-semibold">Holdings</p>
-          <p className="forager-subtitle text-xs">
+          <p className="app-title text-sm font-semibold">Holdings</p>
+          <p className="app-subtitle text-xs">
             {data.tokenCount} token{data.tokenCount === 1 ? '' : 's'} on World
             Chain
           </p>
         </div>
-        <ForagerButton
+        <AppButton
           variant="ghost"
           size="sm"
           onClick={() => {
@@ -151,12 +151,12 @@ export function WalletPanel() {
           }}
         >
           Refresh
-        </ForagerButton>
+        </AppButton>
       </div>
 
-      <div className="forager-scroll max-h-[48dvh] space-y-1.5">
+      <div className="app-scroll max-h-[48dvh] space-y-1.5">
         {data.tokens.length === 0 ? (
-          <p className="forager-subtitle text-sm">No token balances found.</p>
+          <p className="app-subtitle text-sm">No token balances found.</p>
         ) : (
           data.tokens.map((token) => (
             <TokenRow key={token.address} token={token} />
@@ -165,15 +165,15 @@ export function WalletPanel() {
       </div>
 
       {data.forageableCount > 0 ? (
-        <div className="forager-card rounded-2xl p-4">
+        <div className="app-card rounded-2xl p-4">
           <p className="text-sm font-semibold">
             {data.forageableCount} forageable token
             {data.forageableCount === 1 ? '' : 's'}
           </p>
-          <p className="forager-subtitle mt-1 text-xs">
+          <p className="app-subtitle mt-1 text-xs">
             Swap junk tokens into WLD from the Home tab.
           </p>
-          <ForagerButton
+          <AppButton
             variant="primary"
             size="md"
             className="mt-3 w-full"
@@ -183,12 +183,12 @@ export function WalletPanel() {
             }}
           >
             Forage on Home
-          </ForagerButton>
+          </AppButton>
         </div>
       ) : null}
 
       {forageableTokens.length === 0 && data.tokenCount > 0 ? (
-        <p className="forager-subtitle text-center text-xs">
+        <p className="app-subtitle text-center text-xs">
           No junk tokens to forage right now.
         </p>
       ) : null}
@@ -201,7 +201,7 @@ function TokenRow({ token }: { token: WalletToken }) {
   const forageable = isForageableToken(token);
 
   return (
-    <div className="forager-card flex items-center gap-2.5 rounded-2xl px-3 py-2">
+    <div className="app-card flex items-center gap-2.5 rounded-2xl px-3 py-2">
       <TokenIcon
         size="sm"
         address={token.address}
@@ -212,16 +212,16 @@ function TokenRow({ token }: { token: WalletToken }) {
         <div className="flex items-center gap-2">
           <p className="truncate text-sm font-semibold">{token.symbol}</p>
           {isWld ? (
-            <span className="rounded-full bg-forager-purple/20 px-2 py-0.5 text-[10px] font-medium text-forager-purple">
+            <span className="rounded-full bg-app-purple/20 px-2 py-0.5 text-[10px] font-medium text-app-purple">
               Native
             </span>
           ) : forageable ? (
-            <span className="rounded-full bg-forager-bg-elevated px-2 py-0.5 text-[10px] text-forager-text-muted">
+            <span className="rounded-full bg-app-bg-elevated px-2 py-0.5 text-[10px] text-app-text-muted">
               Forageable
             </span>
           ) : null}
         </div>
-        <p className="truncate text-[11px] text-forager-text-muted">{token.name}</p>
+        <p className="truncate text-[11px] text-app-text-muted">{token.name}</p>
       </div>
       <p className="shrink-0 text-xs font-semibold tabular-nums">
         {token.balanceFormatted}

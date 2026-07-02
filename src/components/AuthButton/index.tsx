@@ -1,7 +1,7 @@
 'use client';
 
 import { walletAuth } from '@/auth/wallet';
-import { ForagerButton } from '@/components/ForagerButton';
+import { AppButton } from '@/components/AppButton';
 import { hapticImpact, hapticNotification } from '@/lib/haptics';
 import { LiveFeedback } from '@worldcoin/mini-apps-ui-kit-react';
 import { useMiniKit } from '@worldcoin/minikit-js/minikit-provider';
@@ -75,7 +75,7 @@ export const AuthButton = () => {
       }}
       state={isPending ? 'pending' : undefined}
     >
-      <ForagerButton
+      <AppButton
         onClick={onClick}
         disabled={isPending || !isInstalled}
         size="lg"
@@ -83,7 +83,7 @@ export const AuthButton = () => {
         className="min-w-[220px]"
       >
         Login with Wallet
-      </ForagerButton>
+      </AppButton>
     </LiveFeedback>
   );
 };

@@ -11,7 +11,7 @@ export function SplashScreen({ visible }: SplashScreenProps) {
   return (
     <div
       aria-hidden={!visible}
-      className={`fixed inset-0 z-50 flex flex-col items-center justify-center bg-forager-bg transition-opacity duration-500 ease-out ${
+      className={`fixed inset-0 z-50 flex flex-col items-center justify-center bg-app-bg transition-opacity duration-500 ease-out ${
         visible
           ? 'pointer-events-auto opacity-100'
           : 'pointer-events-none opacity-0'
@@ -25,10 +25,10 @@ export function SplashScreen({ visible }: SplashScreenProps) {
         </div>
 
         <div className="splash-text-animate space-y-2">
-          <h1 className="forager-title text-3xl font-semibold tracking-tight">
+          <h1 className="app-title text-3xl font-semibold tracking-tight">
             {APP_NAME}
           </h1>
-          <p className="forager-subtitle text-sm">{APP_TAGLINE}</p>
+          <p className="app-subtitle text-sm">{APP_TAGLINE}</p>
         </div>
 
         <div className="splash-dots-animate flex items-center gap-1.5">

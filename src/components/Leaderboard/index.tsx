@@ -44,13 +44,13 @@ export function LeaderboardPanel({ compact = false }: LeaderboardPanelProps) {
 
   if (loading) {
     return (
-      <p className="forager-subtitle text-sm">Loading leaderboard...</p>
+      <p className="app-subtitle text-sm">Loading leaderboard...</p>
     );
   }
 
   if (error || !data) {
     return (
-      <p className="forager-subtitle text-sm">
+      <p className="app-subtitle text-sm">
         {error ?? 'Leaderboard unavailable right now.'}
       </p>
     );
@@ -74,19 +74,19 @@ export function LeaderboardPanel({ compact = false }: LeaderboardPanelProps) {
           />
         </div>
       ) : (
-        <p className="forager-subtitle text-xs">
+        <p className="app-subtitle text-xs">
           {formatWldAmount(data.stats.totalWldReclaimed)} WLD reclaimed globally
           · {data.stats.totalForagers} foragers
         </p>
       )}
 
-      <div className="forager-card rounded-2xl p-4">
-        <p className="forager-title mb-3 text-base font-semibold">
+      <div className="app-card rounded-2xl p-4">
+        <p className="app-title mb-3 text-base font-semibold">
           Top reclaimers
         </p>
 
         {data.leaderboard.length === 0 ? (
-          <p className="forager-subtitle text-sm">
+          <p className="app-subtitle text-sm">
             No forages recorded yet. Be the first to reclaim junk into WLD.
           </p>
         ) : (
@@ -94,16 +94,16 @@ export function LeaderboardPanel({ compact = false }: LeaderboardPanelProps) {
             {data.leaderboard.map((entry, index) => (
               <li
                 key={entry.walletAddress}
-                className="flex items-center justify-between gap-3 rounded-xl bg-forager-bg-elevated px-3 py-2"
+                className="flex items-center justify-between gap-3 rounded-xl bg-app-bg-elevated px-3 py-2"
               >
                 <div className="flex min-w-0 items-center gap-3">
-                  <span className="w-5 shrink-0 text-sm font-bold text-forager-purple">
+                  <span className="w-5 shrink-0 text-sm font-bold text-app-purple">
                     {index + 1}
                   </span>
                   {entry.profilePictureUrl ? (
                     <Marble src={entry.profilePictureUrl} className="w-9" />
                   ) : (
-                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-forager-surface text-xs font-bold text-forager-purple">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-app-surface text-xs font-bold text-app-purple">
                       {entry.username?.slice(0, 1).toUpperCase() ?? '?'}
                     </div>
                   )}
@@ -111,13 +111,13 @@ export function LeaderboardPanel({ compact = false }: LeaderboardPanelProps) {
                     <p className="truncate font-medium">
                       {entry.username ?? shortenAddress(entry.walletAddress)}
                     </p>
-                    <p className="forager-subtitle text-xs">
+                    <p className="app-subtitle text-xs">
                       {entry.forageCount} forage
                       {entry.forageCount === 1 ? '' : 's'}
                     </p>
                   </div>
                 </div>
-                <p className="shrink-0 text-sm font-semibold text-forager-purple">
+                <p className="shrink-0 text-sm font-semibold text-app-purple">
                   {formatWldAmount(entry.totalWld)} WLD
                 </p>
               </li>
@@ -131,11 +131,11 @@ export function LeaderboardPanel({ compact = false }: LeaderboardPanelProps) {
 
 function MetricCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="forager-card rounded-2xl p-3 text-center">
-      <p className="forager-subtitle text-[11px] uppercase tracking-wide">
+    <div className="app-card rounded-2xl p-3 text-center">
+      <p className="app-subtitle text-[11px] uppercase tracking-wide">
         {label}
       </p>
-      <p className="mt-1 text-sm font-bold text-forager-purple">{value}</p>
+      <p className="mt-1 text-sm font-bold text-app-purple">{value}</p>
     </div>
   );
 }

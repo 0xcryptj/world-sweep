@@ -2,9 +2,9 @@
 
 import { ErrorBanner } from '@/components/Sweep/ErrorBanner';
 import { TokenIcon } from '@/components/Sweep/TokenIcon';
-import { ForagerActivity, TokenListSkeleton } from '@/components/ForagerActivity';
+import { AppActivity, TokenListSkeleton } from '@/components/AppActivity';
 import { PixelIcon } from '@/components/PixelIcon';
-import { ForagerButton } from '@/components/ForagerButton';
+import { AppButton } from '@/components/AppButton';
 import {
   formatApiError,
   formatMiniKitError,
@@ -557,10 +557,10 @@ export function Sweep() {
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col">
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
-        <p className="forager-subtitle shrink-0 text-sm">{APP_TAGLINE}</p>
+        <p className="app-subtitle shrink-0 text-sm">{APP_TAGLINE}</p>
 
         {!isInstalled && (
-          <p className="forager-card shrink-0 rounded-xl px-4 py-3 text-sm font-medium">
+          <p className="app-card shrink-0 rounded-xl px-4 py-3 text-sm font-medium">
             Open this mini app inside World App to scan your wallet and forage
             tokens.
           </p>
@@ -571,7 +571,7 @@ export function Sweep() {
         )}
 
         <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <ForagerButton
+          <AppButton
             onClick={() => {
               void hapticImpact('light');
               void loadTokens(true);
@@ -581,10 +581,10 @@ export function Sweep() {
             size="sm"
           >
             {state === 'loading-tokens' ? 'Scanning wallet...' : 'Rescan Wallet'}
-          </ForagerButton>
+          </AppButton>
           {isQuoting ? (
-            <span className="forager-subtitle flex items-center gap-1.5 text-xs">
-              <span className="forager-activity-dot" />
+            <span className="app-subtitle flex items-center gap-1.5 text-xs">
+              <span className="app-activity-dot" />
               Building preview...
             </span>
           ) : null}
@@ -592,19 +592,19 @@ export function Sweep() {
 
         <div className="relative min-h-0 flex-1">
           {activityOverlay ? (
-            <ForagerActivity
+            <AppActivity
               title={activityOverlay.title}
               messages={activityOverlay.messages}
               icon={activityOverlay.icon}
             />
           ) : null}
 
-          <div className="forager-scroll h-full space-y-3 pb-2">
+          <div className="app-scroll h-full space-y-3 pb-2">
           <div className="space-y-1.5">
             {state === 'loading-tokens' ? (
               <TokenListSkeleton rows={5} />
             ) : tokens.length === 0 ? (
-              <p className="forager-subtitle text-sm">
+              <p className="app-subtitle text-sm">
                 No swappable tokens found. Tokens without Uniswap liquidity, staked
                 Re tokens, and WLD/WETH/USDC/WBTC are excluded automatically.
               </p>
@@ -612,13 +612,13 @@ export function Sweep() {
               tokens.map((token) => (
                 <label
                   key={token.address}
-                  className="forager-card flex min-w-0 items-center gap-2.5 rounded-2xl px-3 py-2"
+                  className="app-card flex min-w-0 items-center gap-2.5 rounded-2xl px-3 py-2"
                 >
                   <input
                     type="checkbox"
                     checked={Boolean(selected[token.address])}
-                    disabled={state === 'loading-tokens' || isSubmitting}
-                    className="h-4 w-4 shrink-0 accent-forager-purple disabled:opacity-50"
+                    disabled={isSubmitting}
+                    className="h-4 w-4 shrink-0 accent-app-purple disabled:opacity-50"
                     onChange={(event) => {
                       void hapticSelection();
                       lastPreviewedKeyRef.current = '';
@@ -639,11 +639,11 @@ export function Sweep() {
                     <p className="truncate text-sm font-semibold leading-tight">
                       {token.symbol}
                     </p>
-                    <p className="truncate text-[11px] leading-tight text-forager-text-muted">
+                    <p className="truncate text-[11px] leading-tight text-app-text-muted">
                       {token.name}
                     </p>
                   </div>
-                  <p className="shrink-0 text-xs font-semibold tabular-nums text-forager-purple">
+                  <p className="shrink-0 text-xs font-semibold tabular-nums text-app-purple">
                     {token.balanceFormatted}
                   </p>
                 </label>
@@ -653,13 +653,13 @@ export function Sweep() {
 
           {excludedIlliquid.length > 0 ? (
             <div className="space-y-1.5">
-              <p className="forager-subtitle px-1 text-xs font-medium">
+              <p className="app-subtitle px-1 text-xs font-medium">
                 No liquidity (excluded — cannot swap)
               </p>
               {excludedIlliquid.slice(0, 12).map((token) => (
                 <div
                   key={token.address}
-                  className="forager-card flex min-w-0 items-center gap-2.5 rounded-2xl px-3 py-2 opacity-60"
+                  className="app-card flex min-w-0 items-center gap-2.5 rounded-2xl px-3 py-2 opacity-60"
                 >
                   <TokenIcon
                     size="sm"
@@ -671,17 +671,17 @@ export function Sweep() {
                     <p className="truncate text-sm font-semibold leading-tight">
                       {token.symbol}
                     </p>
-                    <p className="truncate text-[11px] leading-tight text-forager-text-muted">
+                    <p className="truncate text-[11px] leading-tight text-app-text-muted">
                       {token.reasonLabel}
                     </p>
                   </div>
-                  <p className="shrink-0 text-xs font-semibold tabular-nums text-forager-text-muted">
+                  <p className="shrink-0 text-xs font-semibold tabular-nums text-app-text-muted">
                     {token.balanceFormatted}
                   </p>
                 </div>
               ))}
               {excludedIlliquid.length > 12 ? (
-                <p className="forager-subtitle px-1 text-xs">
+                <p className="app-subtitle px-1 text-xs">
                   +{excludedIlliquid.length - 12} more without liquidity
                 </p>
               ) : null}
@@ -690,13 +690,13 @@ export function Sweep() {
 
           {excludedStaked.length > 0 ? (
             <div className="space-y-1.5">
-              <p className="forager-subtitle px-1 text-xs font-medium">
+              <p className="app-subtitle px-1 text-xs font-medium">
                 Staked Re tokens (excluded — cannot swap)
               </p>
               {excludedStaked.map((token) => (
                 <div
                   key={token.address}
-                  className="forager-card flex min-w-0 items-center gap-2.5 rounded-2xl px-3 py-2 opacity-60"
+                  className="app-card flex min-w-0 items-center gap-2.5 rounded-2xl px-3 py-2 opacity-60"
                 >
                   <TokenIcon
                     size="sm"
@@ -708,11 +708,11 @@ export function Sweep() {
                     <p className="truncate text-sm font-semibold leading-tight">
                       {token.symbol}
                     </p>
-                    <p className="truncate text-[11px] leading-tight text-forager-text-muted">
+                    <p className="truncate text-[11px] leading-tight text-app-text-muted">
                       {token.reasonLabel}
                     </p>
                   </div>
-                  <p className="shrink-0 text-xs font-semibold tabular-nums text-forager-text-muted">
+                  <p className="shrink-0 text-xs font-semibold tabular-nums text-app-text-muted">
                     {token.balanceFormatted}
                   </p>
                 </div>
@@ -721,15 +721,15 @@ export function Sweep() {
           ) : null}
 
           {plan && (
-            <div className="forager-card rounded-xl p-3 text-sm">
+            <div className="app-card rounded-xl p-3 text-sm">
               <div className="mb-2 flex items-center gap-2">
                 <PixelIcon name="swap" size={18} variant="light" />
-                <p className="forager-title text-sm font-semibold">Forage preview</p>
+                <p className="app-title text-sm font-semibold">Forage preview</p>
               </div>
               <p>Swapping {plan.quotes.length} verified token(s)</p>
               <p>You receive (min): {formatWld(plan.userReceivesWld)}</p>
               {plan.skippedTokens.length > 0 && (
-                <div className="forager-subtitle mt-2 space-y-1 text-xs">
+                <div className="app-subtitle mt-2 space-y-1 text-xs">
                   <p>
                     {plan.skippedTokens.length} token(s) skipped from this
                     batch
@@ -749,7 +749,7 @@ export function Sweep() {
         </div>
       </div>
 
-      <div className="forager-action-bar shrink-0 px-0 pb-1 pt-3">
+      <div className="app-action-bar shrink-0 px-0 pb-1 pt-3">
         <LiveFeedback
           label={{
             failed: failureLabel,
@@ -764,7 +764,7 @@ export function Sweep() {
           state={buttonState}
           className="w-full"
         >
-          <ForagerButton
+          <AppButton
             onClick={() => void onSweep()}
             disabled={
               !canForage ||
@@ -779,7 +779,7 @@ export function Sweep() {
             className="w-full"
           >
             {forageButtonLabel}
-          </ForagerButton>
+          </AppButton>
         </LiveFeedback>
       </div>
     </div>
