@@ -1,8 +1,8 @@
 {
-  "name": "forager",
+  "name": "world-mini-app",
   "version": "0.1.0",
-  "homepage": "https://github.com/0xcryptj/world-sweep",
-  "description": "Sell junk World Chain mini-app tokens for WLD in one transaction",
+  "homepage": "https://github.com/0xcryptj/world-mini-app",
+  "description": "World Mini App - Sell junk World Chain mini-app tokens for WLD in one transaction",
   "license": "MIT",
   "private": true,
   "type": "module",

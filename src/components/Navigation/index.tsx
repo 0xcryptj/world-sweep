@@ -14,7 +14,7 @@ export const Navigation = () => {
   const pathname = usePathname();
 
   return (
-    <nav className="forager-footer z-30 flex h-[var(--forager-nav-height)] items-center justify-around px-1">
+    <nav className="app-footer z-30 flex h-[var(--app-nav-height)] items-center justify-around px-1">
       {tabs.map((tab) => {
         const active =
           pathname === tab.href || pathname.startsWith(`${tab.href}/`);
@@ -25,7 +25,7 @@ export const Navigation = () => {
             href={tab.href}
             prefetch
             className={`flex flex-1 flex-col items-center justify-center gap-0.5 py-1 text-[10px] transition-colors ${
-              active ? 'font-semibold text-forager-purple' : 'text-forager-text-muted'
+              active ? 'font-semibold text-app-purple' : 'text-app-text-muted'
             }`}
           >
             <PixelIcon

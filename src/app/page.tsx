@@ -10,8 +10,8 @@ export default function Home() {
         <div className="flex flex-col items-center gap-4 text-center">
           <AppLogo size="lg" />
           <div className="space-y-2">
-            <h1 className="forager-title text-3xl font-semibold">{APP_NAME}</h1>
-            <p className="forager-subtitle max-w-xs text-sm">{APP_TAGLINE}</p>
+            <h1 className="app-title text-3xl font-semibold">{APP_NAME}</h1>
+            <p className="app-subtitle max-w-xs text-sm">{APP_TAGLINE}</p>
           </div>
         </div>
         <AuthButton />

@@ -3,31 +3,31 @@
 :root {
   --background: #111111;
   --foreground: #ffffff;
-  --forager-bg: #111111;
-  --forager-bg-elevated: #161616;
-  --forager-surface: #1a1a1a;
-  --forager-surface-hover: #222222;
-  --forager-purple: #ab9ff2;
-  --forager-purple-bright: #c4b5fd;
-  --forager-purple-dark: #7c3aed;
-  --forager-text-muted: #9ca3af;
-  --forager-border: #2a2a2a;
-  --forager-nav-height: 3.25rem;
-  --forager-action-height: 4.25rem;
+  --app-bg: #111111;
+  --app-bg-elevated: #161616;
+  --app-surface: #1a1a1a;
+  --app-surface-hover: #222222;
+  --app-purple: #ab9ff2;
+  --app-purple-bright: #c4b5fd;
+  --app-purple-dark: #7c3aed;
+  --app-text-muted: #9ca3af;
+  --app-border: #2a2a2a;
+  --app-nav-height: 3.25rem;
+  --app-action-height: 4.25rem;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --color-forager-bg: var(--forager-bg);
-  --color-forager-bg-elevated: var(--forager-bg-elevated);
-  --color-forager-surface: var(--forager-surface);
-  --color-forager-surface-hover: var(--forager-surface-hover);
-  --color-forager-purple: var(--forager-purple);
-  --color-forager-purple-bright: var(--forager-purple-bright);
-  --color-forager-purple-dark: var(--forager-purple-dark);
-  --color-forager-text-muted: var(--forager-text-muted);
-  --color-forager-border: var(--forager-border);
+  --color-app-bg: var(--app-bg);
+  --color-app-bg-elevated: var(--app-bg-elevated);
+  --color-app-surface: var(--app-surface);
+  --color-app-surface-hover: var(--app-surface-hover);
+  --color-app-purple: var(--app-purple);
+  --color-app-purple-bright: var(--app-purple-bright);
+  --color-app-purple-dark: var(--app-purple-dark);
+  --color-app-text-muted: var(--app-text-muted);
+  --color-app-border: var(--app-border);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -45,36 +45,36 @@ body {
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
 
-.forager-header {
-  background: var(--forager-bg);
-  border-bottom: 1px solid var(--forager-border);
+.app-header {
+  background: var(--app-bg);
+  border-bottom: 1px solid var(--app-border);
 }
 
-.forager-footer {
-  background: var(--forager-bg);
-  border-top: 1px solid var(--forager-border);
+.app-footer {
+  background: var(--app-bg);
+  border-top: 1px solid var(--app-border);
 }
 
-.forager-card {
-  background: var(--forager-surface);
-  border: 1px solid var(--forager-border);
+.app-card {
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
   color: var(--foreground);
 }
 
-.forager-title {
+.app-title {
   color: var(--foreground);
   font-weight: 600;
 }
 
-.forager-subtitle {
-  color: var(--forager-text-muted);
+.app-subtitle {
+  color: var(--app-text-muted);
 }
 
-.forager-accent-text {
-  color: var(--forager-purple);
+.app-accent-text {
+  color: var(--app-purple);
 }
 
-.forager-scroll {
+.app-scroll {
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior-y: contain;
@@ -82,7 +82,7 @@ body {
   -webkit-overflow-scrolling: touch;
 }
 
-.forager-btn {
+.app-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -94,48 +94,48 @@ body {
     transform 0.1s ease;
 }
 
-.forager-btn:disabled {
+.app-btn:disabled {
   cursor: not-allowed;
   opacity: 0.6;
 }
 
-.forager-btn:not(:disabled):active {
+.app-btn:not(:disabled):active {
   transform: scale(0.98);
 }
 
-.forager-btn-primary {
+.app-btn-primary {
   background: linear-gradient(180deg, #b8a8f8 0%, #ab9ff2 45%, #9b8ae8 100%);
   color: #111111;
   border: none;
   box-shadow: 0 4px 14px rgb(171 159 242 / 25%);
 }
 
-.forager-btn-primary:not(:disabled):hover {
+.app-btn-primary:not(:disabled):hover {
   background: linear-gradient(180deg, #c4b5fd 0%, #b8a8f8 45%, #ab9ff2 100%);
 }
 
-.forager-btn-secondary {
-  background: var(--forager-surface);
+.app-btn-secondary {
+  background: var(--app-surface);
   color: var(--foreground);
-  border: 1px solid var(--forager-border);
+  border: 1px solid var(--app-border);
 }
 
-.forager-btn-secondary:not(:disabled):hover {
-  background: var(--forager-surface-hover);
-  border-color: var(--forager-purple);
+.app-btn-secondary:not(:disabled):hover {
+  background: var(--app-surface-hover);
+  border-color: var(--app-purple);
 }
 
-.forager-btn-ghost {
+.app-btn-ghost {
   background: transparent;
-  color: var(--forager-purple);
+  color: var(--app-purple);
   border: 1px solid transparent;
 }
 
-.forager-btn-ghost:not(:disabled):hover {
+.app-btn-ghost:not(:disabled):hover {
   background: rgb(171 159 242 / 10%);
 }
 
-.forager-pixel-icon {
+.app-pixel-icon {
   filter: brightness(0) invert(1);
   opacity: 0.9;
 }
@@ -216,7 +216,7 @@ body {
 
 .splash-dot {
   animation: splash-dot-bounce 1.1s ease-in-out infinite;
-  background: var(--forager-purple);
+  background: var(--app-purple);
 }
 
 .splash-dot-2 {
@@ -227,12 +227,12 @@ body {
   animation-delay: 0.3s;
 }
 
-.forager-action-bar {
-  background: var(--forager-bg);
-  border-top: 1px solid var(--forager-border);
+.app-action-bar {
+  background: var(--app-bg);
+  border-top: 1px solid var(--app-border);
 }
 
-@keyframes forager-activity-bounce {
+@keyframes app-activity-bounce {
   0%,
   100% {
     transform: translateY(0) scale(1);
@@ -243,7 +243,7 @@ body {
   }
 }
 
-@keyframes forager-activity-ring {
+@keyframes app-activity-ring {
   0% {
     transform: scale(0.85);
     opacity: 0.35;
@@ -260,7 +260,7 @@ body {
   }
 }
 
-@keyframes forager-activity-dot-bounce {
+@keyframes app-activity-dot-bounce {
   0%,
   80%,
   100% {
@@ -274,7 +274,7 @@ body {
   }
 }
 
-@keyframes forager-activity-message-fade {
+@keyframes app-activity-message-fade {
   0% {
     opacity: 0;
     transform: translateY(4px);
@@ -286,7 +286,7 @@ body {
   }
 }
 
-@keyframes forager-shimmer {
+@keyframes app-shimmer {
   0% {
     background-position: -200% 0;
   }
@@ -296,7 +296,7 @@ body {
   }
 }
 
-.forager-activity-overlay {
+.app-activity-overlay {
   position: absolute;
   inset: 0;
   z-index: 20;
@@ -308,7 +308,7 @@ body {
   backdrop-filter: blur(4px);
 }
 
-.forager-activity-card {
+.app-activity-card {
   display: flex;
   width: min(100%, 18rem);
   flex-direction: column;
@@ -319,7 +319,7 @@ body {
   text-align: center;
 }
 
-.forager-activity-icon-wrap {
+.app-activity-icon-wrap {
   position: relative;
   display: grid;
   place-items: center;
@@ -327,42 +327,42 @@ body {
   height: 4.5rem;
 }
 
-.forager-activity-ring {
+.app-activity-ring {
   position: absolute;
   inset: 0;
   border-radius: 9999px;
   border: 2px solid rgb(171 159 242 / 35%);
-  animation: forager-activity-ring 1.8s ease-in-out infinite;
+  animation: app-activity-ring 1.8s ease-in-out infinite;
 }
 
-.forager-activity-icon {
+.app-activity-icon {
   position: relative;
   z-index: 1;
-  animation: forager-activity-bounce 1.4s ease-in-out infinite;
+  animation: app-activity-bounce 1.4s ease-in-out infinite;
 }
 
-.forager-activity-message {
+.app-activity-message {
   min-height: 2.5rem;
-  animation: forager-activity-message-fade 0.35s ease-out;
+  animation: app-activity-message-fade 0.35s ease-out;
 }
 
-.forager-activity-dot {
+.app-activity-dot {
   width: 0.45rem;
   height: 0.45rem;
   border-radius: 2px;
-  background: var(--forager-purple);
-  animation: forager-activity-dot-bounce 1.1s ease-in-out infinite;
+  background: var(--app-purple);
+  animation: app-activity-dot-bounce 1.1s ease-in-out infinite;
 }
 
-.forager-activity-dot-2 {
+.app-activity-dot-2 {
   animation-delay: 0.15s;
 }
 
-.forager-activity-dot-3 {
+.app-activity-dot-3 {
   animation-delay: 0.3s;
 }
 
-.forager-skeleton-block {
+.app-skeleton-block {
   background: linear-gradient(
     90deg,
     rgb(255 255 255 / 6%) 0%,
@@ -370,9 +370,9 @@ body {
     rgb(255 255 255 / 6%) 90%
   );
   background-size: 200% 100%;
-  animation: forager-shimmer 1.35s ease-in-out infinite;
+  animation: app-shimmer 1.35s ease-in-out infinite;
 }
 
-.forager-skeleton-row {
+.app-skeleton-row {
   overflow: hidden;
 }

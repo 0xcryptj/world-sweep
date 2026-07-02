@@ -16,12 +16,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Forager',
+  title: 'World Mini App',
   description:
-    'Forage junk mini-app tokens into WLD in one transaction. 5% platform fee on WLD received.',
+    'Convert junk mini-app tokens into WLD in one transaction. 5% platform fee on WLD received.',
   icons: {
-    icon: '/assets/pics/forager-logo.png',
-    apple: '/assets/pics/forager-logo.png',
+    icon: '/assets/pics/app-logo.png',
+    apple: '/assets/pics/app-logo.png',
   },
 };
 
@@ -34,7 +34,7 @@ export default async function RootLayout({
   return (
     <html lang="en" className="overflow-x-hidden">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} overflow-x-hidden bg-forager-bg text-foreground antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} overflow-x-hidden bg-app-bg text-foreground antialiased`}
       >
         <ClientProviders session={session}>{children}</ClientProviders>
       </body>

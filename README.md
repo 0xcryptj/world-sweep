@@ -1,4 +1,4 @@
-# Forager
+# World Mini App
 
 A World App mini app that lets users sell junk mini-app tokens from their World Chain wallet in **one batched transaction** and receive native **WLD**. The app takes a **5% platform fee** on the WLD received from swaps.
 

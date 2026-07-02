@@ -1,11 +1,11 @@
-export const APP_NAME = 'Forager';
+export const APP_NAME = 'World Mini App';
 
 export const APP_TAGLINE = 'Turn junk tokens into WLD';
 
-export const APP_LOGO_SRC = '/assets/pics/forager-logo.png';
+export const APP_LOGO_SRC = '/assets/pics/app-logo.png';
 
-/** Phantom-inspired palette */
-export const FORAGER_COLORS = {
+/** App color palette */
+export const APP_COLORS = {
   bg: '#111111',
   bgElevated: '#1a1a1a',
   surface: '#252525',

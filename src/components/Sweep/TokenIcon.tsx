@@ -40,7 +40,7 @@ export function TokenIcon({
   }, [address, logoUrl, sources]);
 
   const dimensionClass = size === 'sm' ? 'h-8 w-8' : 'h-10 w-10';
-  const frameClass = `relative shrink-0 overflow-hidden rounded-xl bg-forager-surface ${className}`;
+  const frameClass = `relative shrink-0 overflow-hidden rounded-xl bg-app-surface ${className}`;
   const currentSource = sources[sourceIndex];
 
   const tryNextSource = () => {

@@ -37,13 +37,13 @@ export function ProfileStats() {
 
   return (
     <div className="flex w-full flex-col gap-4">
-      <div className="forager-card flex items-center gap-4 rounded-2xl p-4">
+      <div className="app-card flex items-center gap-4 rounded-2xl p-4">
         <Marble src={user.profilePictureUrl} className="w-16" />
         <div className="min-w-0">
           <p className="truncate text-lg font-semibold capitalize">
             {user.username}
           </p>
-          <p className="forager-subtitle text-sm">
+          <p className="app-subtitle text-sm">
             {shortenAddress(user.walletAddress)}
           </p>
         </div>
@@ -71,7 +71,7 @@ export function ProfileStats() {
       </div>
 
       {!loading && !data?.userRank ? (
-        <p className="forager-subtitle rounded-2xl border border-forager-border bg-forager-bg-elevated px-4 py-3 text-sm">
+        <p className="app-subtitle rounded-2xl border border-app-border bg-app-bg-elevated px-4 py-3 text-sm">
           Complete your first successful forage from Home to appear on the
           leaderboard.
         </p>
@@ -84,9 +84,9 @@ export function ProfileStats() {
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="forager-card rounded-2xl p-4">
-      <p className="forager-subtitle text-xs">{label}</p>
-      <p className="mt-1 text-lg font-bold text-forager-purple">{value}</p>
+    <div className="app-card rounded-2xl p-4">
+      <p className="app-subtitle text-xs">{label}</p>
+      <p className="mt-1 text-lg font-bold text-app-purple">{value}</p>
     </div>
   );
 }

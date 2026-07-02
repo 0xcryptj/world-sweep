@@ -22,7 +22,7 @@ const Header = (props: { children: ReactNode; className?: string }) => {
   return (
     <header
       className={twMerge(
-        'forager-header flex flex-col justify-center px-6 pt-6 pb-3 z-10',
+        'app-header flex flex-col justify-center px-6 pt-6 pb-3 z-10',
         clsx(props.className),
       )}
     >
@@ -36,7 +36,7 @@ const Main = (props: { children: ReactNode; className?: string }) => {
     <main
       className={twMerge(
         clsx(
-          'forager-scroll grow bg-forager-bg p-6 pt-3',
+          'app-scroll grow bg-app-bg p-6 pt-3',
           props.className,
         ),
       )}
@@ -50,7 +50,7 @@ const Footer = (props: { children: ReactNode; className?: string }) => {
   return (
     <footer
       className={twMerge(
-        'forager-footer px-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1',
+        'app-footer px-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1',
         clsx(props.className),
       )}
     >
