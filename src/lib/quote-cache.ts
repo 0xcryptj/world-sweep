@@ -12,8 +12,15 @@ const routeCache = new Map<string, CacheEntry>();
 
 const DEFAULT_TTL_MS = 120_000;
 
-export function routeCacheKey(address: string, balance: string): string {
-  return `${address.toLowerCase()}:${balance}`;
+/** `first` = fast-scan firstSuccess; `best` = full best-of tiers (build-sweep). */
+export type RouteQuoteStrategy = 'first' | 'best';
+
+export function routeCacheKey(
+  address: string,
+  balance: string,
+  strategy: RouteQuoteStrategy = 'best',
+): string {
+  return `${address.toLowerCase()}:${balance}:${strategy}`;
 }
 
 export function getCachedRoute(key: string): RouteQuote | null | undefined {
@@ -30,6 +37,9 @@ export function getCachedRoute(key: string): RouteQuote | null | undefined {
   return entry.route;
 }
 
+/** Positive quotes stay warm; nulls expire fast so RPC flakes don't poison scan. */
+const NULL_ROUTE_TTL_MS = 15_000;
+
 export function setCachedRoute(
   key: string,
   route: RouteQuote | null,
@@ -37,13 +47,14 @@ export function setCachedRoute(
 ): void {
   routeCache.set(key, {
     route,
-    expires: Date.now() + ttlMs,
+    expires: Date.now() + (route === null ? Math.min(ttlMs, NULL_ROUTE_TTL_MS) : ttlMs),
   });
 }
 
 type WalletScanResult = {
   tokens: WalletToken[];
   excluded: ScannedExclusion[];
+  mode?: string;
 };
 
 const walletScanCache = new Map<
@@ -76,4 +87,12 @@ export function setCachedWalletScan(
     result,
     expires: Date.now() + ttlMs,
   });
+}
+
+export function clearCachedWalletScan(walletAddress?: string): void {
+  if (!walletAddress) {
+    walletScanCache.clear();
+    return;
+  }
+  walletScanCache.delete(walletAddress.toLowerCase());
 }

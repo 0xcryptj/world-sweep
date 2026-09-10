@@ -1,6 +1,8 @@
 'use client';
 
-import { PixelIcon } from '@/components/PixelIcon';
+import { IosIcon } from '@/components/IosIcon';
+import { hapticSelection } from '@/lib/haptics';
+import { requestWalletRefresh } from '@/lib/wallet-refresh';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
@@ -14,7 +16,7 @@ export const Navigation = () => {
   const pathname = usePathname();
 
   return (
-    <nav className="app-footer z-30 flex h-[var(--app-nav-height)] items-center justify-around px-1">
+    <nav className="z-30 flex h-[var(--forager-nav-height)] items-stretch justify-around px-2">
       {tabs.map((tab) => {
         const active =
           pathname === tab.href || pathname.startsWith(`${tab.href}/`);
@@ -24,16 +26,17 @@ export const Navigation = () => {
             key={tab.href}
             href={tab.href}
             prefetch
-            className={`flex flex-1 flex-col items-center justify-center gap-0.5 py-1 text-[10px] transition-colors ${
-              active ? 'font-semibold text-app-purple' : 'text-app-text-muted'
+            onClick={() => {
+              void hapticSelection();
+              if (tab.href === '/wallet') {
+                requestWalletRefresh({ reason: 'nav' });
+              }
+            }}
+            className={`flex flex-1 flex-col items-center justify-center gap-1 pt-1 text-[10px] font-medium tracking-[0.12px] ${
+              active ? 'forager-tab-active' : 'forager-tab'
             }`}
           >
-            <PixelIcon
-              name={tab.icon}
-              size={20}
-              variant="light"
-              className={active ? 'opacity-100' : 'opacity-75'}
-            />
+            <IosIcon name={tab.icon} size={25} filled={active} />
             <span>{tab.label}</span>
           </Link>
         );

@@ -1,4 +1,5 @@
 'use client';
+import { apiPath } from '@/lib/base-path';
 import { IDKit, orbLegacy, type RpContext } from '@worldcoin/idkit';
 import { Button, LiveFeedback } from '@worldcoin/mini-apps-ui-kit-react';
 import { useState } from 'react';
@@ -18,7 +19,7 @@ export const Verify = ({ action }: { action: string }) => {
     setButtonState('pending');
     try {
       // Fetch RP signature from your backend
-      const rpRes = await fetch('/api/rp-signature', {
+      const rpRes = await fetch(apiPath('/rp-signature'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action }),
@@ -54,7 +55,7 @@ export const Verify = ({ action }: { action: string }) => {
       }
 
       // Verify the proof on the server
-      const response = await fetch('/api/verify-proof', {
+      const response = await fetch(apiPath('/verify-proof'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

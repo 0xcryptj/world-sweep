@@ -1,0 +1,11 @@
+{
+  "note": "Apply via configure_mini_app after verification_status leaves awaiting_review (edits are locked until then).",
+  "app_id": "app_a05e0d4389f6fa77f5380724caf300bb",
+  "world_app_description": "Turn junk World Chain tokens into WLD",
+  "world_app_button_text": "Forage junk",
+  "description_overview": "Forager finds leftover junk tokens in your World Chain wallet that still have liquidity, then batches them into one swap back to WLD. You pick what to forage, preview the route and fee, and approve the transaction in World App — nothing runs without you.",
+  "description_how_it_works": "1. Sign in with World App. 2. Forager scans your wallet for junk ERC-20s with real Uniswap liquidity to WLD. 3. Select tokens, preview estimated WLD (5% platform fee). 4. Approve the batched swap in World App. Dust becomes usable WLD.",
+  "description_connect": "Open Forager inside World App, connect your wallet, and forage whenever mini-app airdrops leave tokens sitting idle.",
+  "max_notifications_per_day": "1",
+  "support_link": "mailto:joarbiser@gmail.com"
+}

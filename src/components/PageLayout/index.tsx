@@ -10,7 +10,7 @@ export const Page = (props: { children: ReactNode; className?: string }) => {
   return (
     <div
       className={twMerge(
-        clsx('flex h-dvh max-w-[100vw] flex-col overflow-x-hidden', props.className),
+        clsx('relative z-10 flex h-dvh max-w-[100vw] flex-col overflow-x-hidden', props.className),
       )}
     >
       {props.children}
@@ -22,7 +22,7 @@ const Header = (props: { children: ReactNode; className?: string }) => {
   return (
     <header
       className={twMerge(
-        'app-header flex flex-col justify-center px-6 pt-6 pb-3 z-10',
+        'forager-header z-10 flex flex-col justify-end pl-[var(--forager-page-x)] pr-[var(--forager-page-x-end)] pt-[max(0.75rem,env(safe-area-inset-top))] pb-2',
         clsx(props.className),
       )}
     >
@@ -36,7 +36,7 @@ const Main = (props: { children: ReactNode; className?: string }) => {
     <main
       className={twMerge(
         clsx(
-          'app-scroll grow bg-app-bg p-6 pt-3',
+          'forager-scroll grow bg-transparent pl-[var(--forager-page-x)] pr-[var(--forager-page-x-end)] pt-[var(--forager-page-y)] pb-[var(--forager-stack-loose)]',
           props.className,
         ),
       )}
@@ -50,7 +50,7 @@ const Footer = (props: { children: ReactNode; className?: string }) => {
   return (
     <footer
       className={twMerge(
-        'app-footer px-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1',
+        'forager-footer px-0 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-0',
         clsx(props.className),
       )}
     >

@@ -1,0 +1,68 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "buildCommand": "npm run build",
+  "installCommand": "npm install",
+  "functions": {
+    "src/app/api/**/*.ts": {
+      "maxDuration": 60
+    }
+  },
+  "redirects": [
+    {
+      "source": "/",
+      "destination": "/world/enter",
+      "permanent": false
+    },
+    {
+      "source": "/enter",
+      "destination": "/world/enter",
+      "permanent": false
+    },
+    {
+      "source": "/home",
+      "destination": "/world/home",
+      "permanent": false
+    },
+    {
+      "source": "/wallet",
+      "destination": "/world/wallet",
+      "permanent": false
+    },
+    {
+      "source": "/profile",
+      "destination": "/world/profile",
+      "permanent": false
+    },
+    {
+      "source": "/invite",
+      "destination": "/world/invite",
+      "permanent": false
+    },
+    {
+      "source": "/invite/:path*",
+      "destination": "/world/invite/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "/world/api/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/assets/:path*",
+      "destination": "/world/assets/:path*",
+      "permanent": false
+    }
+  ],
+  "crons": [
+    {
+      "path": "/world/api/cron/portal-allowlist",
+      "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/world/api/cron/notify-dust",
+      "schedule": "0 16 * * 3"
+    }
+  ]
+}

@@ -9,7 +9,7 @@ import { getNewNonces } from './server-helpers';
  * producing a `signedNonce`. The `signedNonce` ensures the response we receive from wallet auth
  * is authentic and matches our session creation.
  *
- * @returns {Promise<SignInResponse>} The result of the sign-in attempt.
+ * @returns Session sign-in result (no server redirect — client navigates to /home).
  * @throws {Error} If wallet authentication fails at any step.
  */
 export const walletAuth = async () => {
@@ -23,8 +23,9 @@ export const walletAuth = async () => {
   });
   console.log('Result', result);
 
-  await signIn('credentials', {
-    redirectTo: '/home',
+  const signInResult = await signIn('credentials', {
+    // Avoid server redirect — Auth.js treats `/home` as domain-root (404 without /world).
+    redirect: false,
     nonce,
     signedNonce,
     finalPayloadJson: JSON.stringify({
@@ -34,4 +35,10 @@ export const walletAuth = async () => {
       signature: result.data.signature,
     }),
   });
+
+  if (signInResult?.error) {
+    throw new Error(signInResult.error);
+  }
+
+  return signInResult;
 };

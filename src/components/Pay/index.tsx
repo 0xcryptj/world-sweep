@@ -1,4 +1,5 @@
 'use client';
+import { apiPath } from '@/lib/base-path';
 import { Button, LiveFeedback } from '@worldcoin/mini-apps-ui-kit-react';
 import { MiniKit } from '@worldcoin/minikit-js';
 import { Tokens, tokenToDecimals } from '@worldcoin/minikit-js/commands';
@@ -19,7 +20,7 @@ export const Pay = () => {
     const address = (await MiniKit.getUserByUsername('alex')).walletAddress;
     setButtonState('pending');
 
-    const res = await fetch('/api/initiate-payment', {
+    const res = await fetch(apiPath('/initiate-payment'), {
       method: 'POST',
     });
     const { id } = await res.json();

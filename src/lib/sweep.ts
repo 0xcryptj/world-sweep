@@ -1,47 +1,96 @@
 import { formatUnitsCapped } from './format-balance';
 import {
+  decodeFunctionData,
+  decodeFunctionResult,
   encodeFunctionData,
   getAddress,
+  isAddress,
   type Address,
   type Hex,
 } from 'viem';
-import { erc20Abi, permit2Abi, swapRouterAbi } from './abis';
-import { isPermit2Allowlisted } from './allowlist';
+import { erc20Abi, swapRouterAbi } from './abis';
+import {
+  ALLOWLIST_PENDING_SKIP_REASON,
+  isPermit2Allowlisted,
+} from './allowlist';
 import {
   MAX_TOKENS_PER_SWEEP,
   MIN_WLD_OUT_WEI,
-  PERMIT2_ADDRESS,
   PLATFORM_FEE_BPS,
   PLATFORM_FEE_WALLET,
   SLIPPAGE_BPS,
   UNISWAP_V3_SWAP_ROUTER,
   WLD_ADDRESS,
 } from './constants';
+import { checkRouterTransferability } from './honeypot';
+import { fetchTokenBalancesWei, publicClient } from './tokens';
 import { isForageableToken } from './token-filters';
+import { simulateSweepBatch } from './simulate-batch';
 import {
   applySlippage,
-  deserializeRoute,
   encodeV3Path,
   quoteRouteToWld,
+  QuoteTransportError,
   type RouteQuote,
 } from './swap-quotes';
 import type { BuildSweepResponse, SweepQuote, WalletToken } from './types';
 
-const MAX_UINT160 = (BigInt(1) << BigInt(160)) - BigInt(1);
+export { checkRouterTransferability };
 
-function toUint160(amount: bigint): bigint {
-  if (amount > MAX_UINT160) {
-    throw new Error('Token amount exceeds Permit2 limit');
+/**
+ * Clamp client-claimed balances to live Alchemy balances so stale session
+ * cache amounts cannot revert the whole atomic batch (and fee transfer).
+ */
+async function clampTokensToLiveBalances(
+  walletAddress: Address,
+  tokens: WalletToken[],
+): Promise<WalletToken[]> {
+  if (tokens.length === 0) {
+    return tokens;
   }
-  return amount;
+
+  let live: Map<string, bigint>;
+  try {
+    live = await fetchTokenBalancesWei(
+      walletAddress,
+      tokens.map((token) => token.address),
+    );
+  } catch (error) {
+    console.warn(
+      '[build-sweep] live balance clamp failed; using client balances',
+      error instanceof Error ? error.message : error,
+    );
+    return tokens;
+  }
+
+  const clamped: WalletToken[] = [];
+  for (const token of tokens) {
+    const claimed = BigInt(token.balance);
+    const onchain = live.get(token.address.toLowerCase());
+    if (onchain === undefined) {
+      clamped.push(token);
+      continue;
+    }
+    const amountIn = claimed < onchain ? claimed : onchain;
+    if (amountIn <= BigInt(0)) {
+      continue;
+    }
+    if (amountIn === claimed) {
+      clamped.push(token);
+      continue;
+    }
+    clamped.push({
+      ...token,
+      balance: amountIn.toString(),
+      balanceFormatted: formatUnitsCapped(amountIn, token.decimals || 18),
+      cachedRoute: null,
+    });
+  }
+  return clamped;
 }
 
 function asCalldataTx(to: Address, data: Hex) {
-  return {
-    to,
-    data,
-    value: '0x0' as const,
-  };
+  return { to: getAddress(to), data, value: '0x0' as const };
 }
 
 function buildSwapTransaction({
@@ -49,13 +98,11 @@ function buildSwapTransaction({
   amountIn,
   minWldOut,
   recipient,
-  deadline,
 }: {
   route: RouteQuote;
   amountIn: bigint;
   minWldOut: bigint;
   recipient: Address;
-  deadline: bigint;
 }) {
   if (route.hops.length === 1) {
     const hop = route.hops[0];
@@ -70,7 +117,6 @@ function buildSwapTransaction({
             tokenOut: hop.tokenOut,
             fee: hop.fee,
             recipient,
-            deadline,
             amountIn,
             amountOutMinimum: minWldOut,
             sqrtPriceLimitX96: BigInt(0),
@@ -89,7 +135,6 @@ function buildSwapTransaction({
         {
           path: encodeV3Path(route.hops),
           recipient,
-          deadline,
           amountIn,
           amountOutMinimum: minWldOut,
         },
@@ -98,23 +143,121 @@ function buildSwapTransaction({
   );
 }
 
-function buildPermit2Approval(token: Address, amount: bigint) {
-  return asCalldataTx(
-    PERMIT2_ADDRESS,
-    encodeFunctionData({
-      abi: permit2Abi,
-      functionName: 'approve',
-      args: [token, UNISWAP_V3_SWAP_ROUTER, toUint160(amount), 0],
-    }),
-  );
+function getApprovalErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message;
+  }
+
+  if (typeof error === 'string' && error.trim().length > 0) {
+    return error;
+  }
+
+  return 'Token rejected approve() simulation';
+}
+
+/** World Chain Uniswap V3 SwapRouter pulls via ERC20 transferFrom, not Permit2. */
+async function buildRouterTokenApproval(
+  token: Address,
+  amount: bigint,
+  account: Address,
+) {
+  const data = encodeFunctionData({
+    abi: erc20Abi,
+    functionName: 'approve',
+    args: [UNISWAP_V3_SWAP_ROUTER, amount],
+  });
+
+  try {
+    const simulation = await publicClient.call({
+      account,
+      to: token,
+      data,
+    });
+
+    if (simulation.data && simulation.data !== '0x') {
+      try {
+        const approved = decodeFunctionResult({
+          abi: erc20Abi,
+          functionName: 'approve',
+          data: simulation.data,
+        });
+
+        if (approved === false) {
+          throw new Error('Token approve() returned false');
+        }
+      } catch (decodeError) {
+        // Non-standard ERC-20s may not return a bool; ignore decode failures.
+        if (
+          decodeError instanceof Error &&
+          decodeError.message.includes('returned false')
+        ) {
+          throw decodeError;
+        }
+      }
+    }
+  } catch (error) {
+    throw new Error(getApprovalErrorMessage(error));
+  }
+
+  return asCalldataTx(token, data);
 }
 
 async function resolveRoute(token: WalletToken): Promise<RouteQuote | null> {
-  if (token.cachedRoute) {
-    return deserializeRoute(token.cachedRoute);
+  // SECURITY: never trust a client-supplied `cachedRoute` for path encoding or
+  // output amounts. A crafted cachedRoute could set an arbitrary swap path
+  // (routing through an attacker pool) or a tiny `amountOut` that collapses
+  // `minWldOut` (removing slippage protection / enabling sandwiches) and rounds
+  // the platform fee toward zero. Always re-derive the route from the on-chain
+  // Uniswap V3 quoter server-side. The route cache (keyed by address:balance)
+  // keeps this cheap across the preview→submit round trips.
+  return quoteRouteToWld({ ...token, cachedRoute: null });
+}
+
+/**
+ * REVENUE INVARIANT (belt-and-braces against future regressions): whenever a
+ * sweep plan contains any swaps, the FINAL transaction of the batch MUST be a
+ * WLD `transfer(feeWallet, amount)` with amount > 0. Decodes the calldata we
+ * just built and throws if anything about it is off, so a bug upstream can
+ * never ship a batch that swaps without paying the platform fee.
+ */
+function assertFeeTransferInvariant(
+  transactions: BuildSweepResponse['transactions'],
+  feeWallet: Address,
+) {
+  const last = transactions[transactions.length - 1];
+
+  if (!last || getAddress(last.to) !== getAddress(WLD_ADDRESS)) {
+    throw new Error(
+      'Fee invariant violated: final transaction is not a WLD call',
+    );
   }
 
-  return quoteRouteToWld(token);
+  let decoded: { functionName: string; args: readonly unknown[] };
+  try {
+    decoded = decodeFunctionData({ abi: erc20Abi, data: last.data });
+  } catch {
+    throw new Error(
+      'Fee invariant violated: final transaction is not decodable ERC-20 calldata',
+    );
+  }
+
+  if (decoded.functionName !== 'transfer') {
+    throw new Error(
+      'Fee invariant violated: final transaction is not a WLD transfer',
+    );
+  }
+
+  const [recipient, amount] = decoded.args as [Address, bigint];
+
+  if (getAddress(recipient) !== getAddress(feeWallet)) {
+    throw new Error(
+      'Fee invariant violated: fee transfer recipient is not the platform fee wallet',
+    );
+  }
+
+  if (amount <= BigInt(0)) {
+    throw new Error('Fee invariant violated: fee transfer amount is zero');
+  }
 }
 
 export async function buildSweepPlan({
@@ -130,26 +273,48 @@ export async function buildSweepPlan({
     );
   }
 
-  const candidates = tokens.filter((token) => isForageableToken(token));
-  const deadline = BigInt(Math.floor(Date.now() / 1000) + 60 * 10);
+  const candidates = await clampTokensToLiveBalances(
+    getAddress(walletAddress),
+    tokens.filter((token) => isForageableToken(token)),
+  );
   const recipient = getAddress(walletAddress);
   const feeWallet = getAddress(PLATFORM_FEE_WALLET);
 
   const quotes: SweepQuote[] = [];
   const skippedTokens: BuildSweepResponse['skippedTokens'] = [];
   const transactions: BuildSweepResponse['transactions'] = [];
+  /** Sum of per-token minWldOut (quote minus slippage) — the guaranteed floor. */
   let estimatedWldTotal = BigInt(0);
+  /** Sum of per-token quoted amountOut — the fee base (5% of full quotes). */
+  let quotedWldTotal = BigInt(0);
 
   for (const token of candidates) {
     if (quotes.length >= MAX_TOKENS_PER_SWEEP) {
       break;
     }
 
+    // Reject structurally invalid client input before it reaches address /
+    // BigInt parsing (which would otherwise throw and 500 the whole batch).
+    if (!isAddress(token.address) || !/^\d+$/.test(String(token.balance))) {
+      skippedTokens.push({
+        address: String(token.address),
+        symbol: String(token.symbol ?? 'UNKNOWN'),
+        reason: 'Invalid token address or balance',
+      });
+      continue;
+    }
+
+    // Every Worldchain token is foragable-by-default; the transferability +
+    // approval simulations below (and the explicit MALICIOUS_TOKEN_ADDRESSES
+    // blocklist inside isForageableToken) are the real gate. Tokens not yet on
+    // the Developer Portal allowlist are soft-skipped so World App never
+    // hard-blocks the whole batch with invalid_contract.
+
     if (!isPermit2Allowlisted(token.address)) {
       skippedTokens.push({
         address: token.address,
         symbol: token.symbol,
-        reason: 'Token not allowlisted in Developer Portal (Permit2)',
+        reason: ALLOWLIST_PENDING_SKIP_REASON,
       });
       continue;
     }
@@ -159,7 +324,24 @@ export async function buildSweepPlan({
       continue;
     }
 
-    const route = await resolveRoute(token);
+    // Do NOT hard-skip on wallet→router `transfer` eth_call — many liquid
+    // World Chain bags false-positive here while approve+transferFrom works.
+    // Approval simulation below is the real sellability gate.
+
+    let route: RouteQuote | null = null;
+    try {
+      route = await resolveRoute(token);
+    } catch (error) {
+      skippedTokens.push({
+        address: token.address,
+        symbol: token.symbol,
+        reason:
+          error instanceof QuoteTransportError
+            ? 'Quote RPC busy — retry in a moment'
+            : 'Could not quote a WLD route right now',
+      });
+      continue;
+    }
 
     if (!route) {
       skippedTokens.push({
@@ -182,6 +364,7 @@ export async function buildSweepPlan({
     }
 
     estimatedWldTotal += minWldOut;
+    quotedWldTotal += route.amountOut;
 
     quotes.push({
       tokenAddress: token.address,
@@ -193,40 +376,100 @@ export async function buildSweepPlan({
       routeLabel: route.label,
     });
 
-    transactions.push(
-      buildPermit2Approval(getAddress(token.address), amountIn),
-      buildSwapTransaction({
+    try {
+      const approvalTx = await buildRouterTokenApproval(
+        getAddress(token.address),
+        amountIn,
+        recipient,
+      );
+      const swapTx = buildSwapTransaction({
         route,
         amountIn,
         minWldOut,
         recipient,
-        deadline,
-      }),
-    );
+      });
+
+      let simulationError: string | null = null;
+      try {
+        simulationError = await simulateSweepBatch(recipient, [
+          ...transactions,
+          approvalTx,
+          swapTx,
+        ]);
+      } catch (simulateError) {
+        console.warn(
+          '[build-sweep] batch simulation skipped',
+          simulateError instanceof Error ? simulateError.message : simulateError,
+        );
+      }
+      if (simulationError) {
+        skippedTokens.push({
+          address: token.address,
+          symbol: token.symbol,
+          reason: `Swap simulation failed: ${simulationError}`,
+        });
+        quotes.pop();
+        estimatedWldTotal -= minWldOut;
+        quotedWldTotal -= route.amountOut;
+        continue;
+      }
+
+      transactions.push(approvalTx, swapTx);
+    } catch (approvalError) {
+      skippedTokens.push({
+        address: token.address,
+        symbol: token.symbol,
+        reason: `Approval simulation failed: ${
+          approvalError instanceof Error
+            ? approvalError.message
+            : 'Token rejected approve()'
+        }`,
+      });
+      quotes.pop();
+      estimatedWldTotal -= minWldOut;
+      quotedWldTotal -= route.amountOut;
+      continue;
+    }
   }
 
+  // Soft empty plan — callers degrade gracefully (deselect / empty preview)
+  // instead of surfacing a hard error wall for unquotable selections.
   if (quotes.length === 0) {
-    throw new Error(
-      'No selected tokens have a swappable route to WLD on Uniswap V3.',
-    );
+    return {
+      quotes: [],
+      skippedTokens,
+      transactions: [],
+      estimatedWldTotal: '0',
+      platformFeeWld: '0',
+      userReceivesWld: '0',
+    };
   }
 
+  // REVENUE: the platform fee is PLATFORM_FEE_BPS of the *full quoted* output
+  // (sum of route.amountOut), not of the post-slippage floor. This is still
+  // guaranteed-safe: the swaps produce at least sum(minWldOut) ≈ 97% of the
+  // quotes, and 5% of quotes < 97% of quotes, so the fee transfer can never
+  // exceed what the batch just swapped into the wallet.
   const platformFeeWld =
-    (estimatedWldTotal * BigInt(PLATFORM_FEE_BPS)) / BigInt(10_000);
+    (quotedWldTotal * BigInt(PLATFORM_FEE_BPS)) / BigInt(10_000);
+  // Guaranteed minimum for the user: slippage floor minus the fee.
   const userReceivesWld = estimatedWldTotal - platformFeeWld;
 
-  if (platformFeeWld > BigInt(0)) {
-    transactions.push(
-      asCalldataTx(
-        WLD_ADDRESS,
-        encodeFunctionData({
-          abi: erc20Abi,
-          functionName: 'transfer',
-          args: [feeWallet, platformFeeWld],
-        }),
-      ),
-    );
-  }
+  // Every included token satisfies minWldOut >= MIN_WLD_OUT_WEI, so
+  // quotedWldTotal is large enough that the 5% fee cannot round to zero.
+  // The invariant below still guards this unconditionally.
+  transactions.push(
+    asCalldataTx(
+      WLD_ADDRESS,
+      encodeFunctionData({
+        abi: erc20Abi,
+        functionName: 'transfer',
+        args: [feeWallet, platformFeeWld],
+      }),
+    ),
+  );
+
+  assertFeeTransferInvariant(transactions, feeWallet);
 
   return {
     quotes,

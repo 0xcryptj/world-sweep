@@ -1,5 +1,7 @@
 import {
   decodeErrorResult,
+  decodeFunctionResult,
+  encodeFunctionData,
   encodePacked,
   getAddress,
   type Address,
@@ -21,6 +23,7 @@ import {
   setCachedRoute,
 } from './quote-cache';
 import { publicClient } from './tokens';
+import { withTimeout } from './fetch-with-timeout';
 import type { CachedRouteQuote, WalletToken } from './types';
 
 export type RouteHop = {
@@ -35,6 +38,16 @@ export type RouteQuote = {
   label: string;
 };
 
+/** Thrown when the quoter RPC is flaky — callers must NOT treat this as no liquidity. */
+export class QuoteTransportError extends Error {
+  constructor(message = 'Token quote RPC failed') {
+    super(message);
+    this.name = 'QuoteTransportError';
+  }
+}
+
+const QUOTER_GAS = BigInt(2_000_000);
+
 const quoterSingleErrorAbi = [
   {
     type: 'error',
@@ -43,6 +56,19 @@ const quoterSingleErrorAbi = [
       { name: 'amountOut', type: 'uint256' },
       { name: 'sqrtPriceX96After', type: 'uint160' },
       { name: 'initializedTicksCrossed', type: 'uint32' },
+      { name: 'gasEstimate', type: 'uint256' },
+    ],
+  },
+] as const;
+
+const quoterPathErrorAbi = [
+  {
+    type: 'error',
+    name: 'QuoteExactInput',
+    inputs: [
+      { name: 'amountOut', type: 'uint256' },
+      { name: 'sqrtPriceX96AfterList', type: 'uint160[]' },
+      { name: 'initializedTicksCrossedList', type: 'uint32[]' },
       { name: 'gasEstimate', type: 'uint256' },
     ],
   },
@@ -92,41 +118,136 @@ function encodeV3Path(hops: RouteHop[]): Hex {
   return encodePacked(parts, values);
 }
 
+function isHexData(value: unknown): value is Hex {
+  return typeof value === 'string' && /^0x[0-9a-fA-F]{8,}$/.test(value);
+}
+
 function extractRevertData(error: unknown): Hex | null {
-  if (!error || typeof error !== 'object') {
-    return null;
-  }
+  const seen = new Set<unknown>();
+  const stack: unknown[] = [error];
 
-  const candidate = error as {
-    data?: Hex;
-    cause?: { data?: Hex };
-    walk?: () => Iterable<{ data?: Hex }>;
-  };
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (!current || seen.has(current)) {
+      continue;
+    }
+    seen.add(current);
 
-  if (candidate.data) {
-    return candidate.data;
-  }
+    if (isHexData(current)) {
+      return current;
+    }
 
-  if (candidate.cause?.data) {
-    return candidate.cause.data;
-  }
+    if (typeof current !== 'object') {
+      continue;
+    }
 
-  if (typeof candidate.walk === 'function') {
-    try {
-      const walked = candidate.walk();
-      if (walked && typeof walked[Symbol.iterator] === 'function') {
-        for (const nested of walked) {
-          if (nested?.data) {
-            return nested.data;
-          }
-        }
+    const candidate = current as {
+      data?: unknown;
+      raw?: unknown;
+      hex?: unknown;
+      details?: unknown;
+      cause?: unknown;
+      error?: unknown;
+      value?: unknown;
+      walk?: (fn?: (value: unknown) => unknown) => unknown;
+    };
+
+    for (const value of [
+      candidate.data,
+      candidate.raw,
+      candidate.hex,
+      candidate.details,
+    ]) {
+      if (isHexData(value)) {
+        return value;
       }
-    } catch {
-      return null;
+      if (value && typeof value === 'object') {
+        stack.push(value);
+      }
+    }
+
+    if (candidate.cause) {
+      stack.push(candidate.cause);
+    }
+    if (candidate.error) {
+      stack.push(candidate.error);
+    }
+    if (candidate.value) {
+      stack.push(candidate.value);
+    }
+
+    if (typeof candidate.walk === 'function') {
+      try {
+        const walked = candidate.walk((nested) =>
+          isHexData((nested as { data?: unknown })?.data)
+            ? (nested as { data: Hex }).data
+            : null,
+        );
+        if (isHexData(walked)) {
+          return walked;
+        }
+      } catch {
+        // ignore walk failures
+      }
     }
   }
 
   return null;
+}
+
+function isQuoterTransportError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+  const candidate = error as {
+    name?: string;
+    status?: number;
+    details?: string;
+    shortMessage?: string;
+    message?: string;
+    code?: string | number;
+  };
+  if (candidate.status === 429 || (candidate.status != null && candidate.status >= 500)) {
+    return true;
+  }
+  const text = [
+    candidate.name,
+    candidate.details,
+    candidate.shortMessage,
+    candidate.message,
+    String(candidate.code ?? ''),
+  ]
+    .filter(Boolean)
+    .join(' ');
+  return /HttpRequestError|TimeoutError|RpcRequestError|InternalRpcError|\b429\b|too many requests|rate[- ]?limit|timeout|timed out|ECONNRESET|fetch failed|network|busy|socket|EAI_AGAIN/i.test(
+    text,
+  );
+}
+
+function decodeQuotedAmount(
+  data: Hex,
+  kind: 'single' | 'path',
+): bigint | null {
+  try {
+    const decoded = decodeFunctionResult({
+      abi: quoterV2Abi,
+      functionName: kind === 'single' ? 'quoteExactInputSingle' : 'quoteExactInput',
+      data,
+    });
+    const amountOut = decoded[0];
+    return amountOut > BigInt(0) ? amountOut : null;
+  } catch {
+    try {
+      const decoded = decodeErrorResult({
+        abi: kind === 'single' ? quoterSingleErrorAbi : quoterPathErrorAbi,
+        data,
+      });
+      const amountOut = decoded.args[0];
+      return amountOut > BigInt(0) ? amountOut : null;
+    } catch {
+      return null;
+    }
+  }
 }
 
 async function quoteExactInputSingle(
@@ -135,78 +256,148 @@ async function quoteExactInputSingle(
   amountIn: bigint,
   fee: number,
 ): Promise<bigint | null> {
-  try {
-    const result = await publicClient.simulateContract({
-      address: UNISWAP_V3_QUOTER_V2,
-      abi: quoterV2Abi,
-      functionName: 'quoteExactInputSingle',
-      args: [
-        {
-          tokenIn,
-          tokenOut,
-          amountIn,
-          fee,
-          sqrtPriceLimitX96: BigInt(0),
-        },
-      ],
-    });
-
-    return result.result[0];
-  } catch (error) {
-    const data = extractRevertData(error);
-    if (!data) {
-      return null;
-    }
-
-    try {
-      const decoded = decodeErrorResult({
-        abi: quoterSingleErrorAbi,
-        data,
-      });
-      return decoded.args[0] > BigInt(0) ? decoded.args[0] : null;
-    } catch {
-      return null;
-    }
-  }
-}
-
-async function bestQuoteAcrossFees(
-  tokenIn: Address,
-  tokenOut: Address,
-  amountIn: bigint,
-): Promise<{ fee: number; amountOut: bigint } | null> {
-  const quotes = await Promise.all(
-    FEE_TIERS.map(async (fee) => {
-      const amountOut = await quoteExactInputSingle(
+  const data = encodeFunctionData({
+    abi: quoterV2Abi,
+    functionName: 'quoteExactInputSingle',
+    args: [
+      {
         tokenIn,
         tokenOut,
         amountIn,
         fee,
-      );
-      return amountOut ? { fee, amountOut } : null;
-    }),
-  );
+        sqrtPriceLimitX96: BigInt(0),
+      },
+    ],
+  });
 
-  const valid = quotes.filter(
-    (quote): quote is { fee: number; amountOut: bigint } => quote !== null,
-  );
+  try {
+    const result = await withTimeout(
+      publicClient.call({
+        to: UNISWAP_V3_QUOTER_V2,
+        data,
+        gas: QUOTER_GAS,
+      }),
+      5_000,
+      'Quoter call timed out',
+    );
 
-  if (valid.length === 0) {
-    return null;
+    if (!result.data || result.data === '0x') {
+      return null;
+    }
+
+    return decodeQuotedAmount(result.data, 'single');
+  } catch (error) {
+    // Bubble RPC/rate-limit failures so quoteRouteToWld can retry once.
+    // Definitive no-pool reverts fall through to null below.
+    if (isQuoterTransportError(error)) {
+      throw error;
+    }
+
+    const revertData = extractRevertData(error);
+    if (!revertData) {
+      return null;
+    }
+
+    return decodeQuotedAmount(revertData, 'single');
+  }
+}
+
+async function quoteExactInputPath(
+  hops: RouteHop[],
+  amountIn: bigint,
+): Promise<bigint | null> {
+  const data = encodeFunctionData({
+    abi: quoterV2Abi,
+    functionName: 'quoteExactInput',
+    args: [encodeV3Path(hops), amountIn],
+  });
+
+  try {
+    const result = await withTimeout(
+      publicClient.call({
+        to: UNISWAP_V3_QUOTER_V2,
+        data,
+        gas: QUOTER_GAS,
+      }),
+      5_000,
+      'Quoter call timed out',
+    );
+
+    if (!result.data || result.data === '0x') {
+      return null;
+    }
+
+    return decodeQuotedAmount(result.data, 'path');
+  } catch (error) {
+    if (isQuoterTransportError(error)) {
+      throw error;
+    }
+
+    const revertData = extractRevertData(error);
+    if (!revertData) {
+      return null;
+    }
+
+    return decodeQuotedAmount(revertData, 'path');
+  }
+}
+
+/**
+ * Sequential fee-tier quotes to cut Alchemy CU.
+ * - firstSuccess: stop at the first positive tier (fast scan).
+ * - otherwise: walk all tiers and keep the best amountOut (full scan).
+ * Never fire all three eth_calls in parallel — that spikes rate limits.
+ */
+async function bestQuoteAcrossFees(
+  tokenIn: Address,
+  tokenOut: Address,
+  amountIn: bigint,
+  options?: { firstSuccess?: boolean },
+): Promise<{ fee: number; amountOut: bigint } | null> {
+  let best: { fee: number; amountOut: bigint } | null = null;
+
+  for (const fee of FEE_TIERS) {
+    const amountOut = await quoteExactInputSingle(
+      tokenIn,
+      tokenOut,
+      amountIn,
+      fee,
+    );
+    if (!amountOut || amountOut <= BigInt(0)) {
+      continue;
+    }
+
+    if (options?.firstSuccess) {
+      return { fee, amountOut };
+    }
+
+    if (!best || amountOut > best.amountOut) {
+      best = { fee, amountOut };
+    }
   }
 
-  return valid.reduce((best, current) =>
-    current.amountOut > best.amountOut ? current : best,
-  );
+  return best;
 }
 
 async function quoteHop(
   tokenIn: Address,
   tokenOut: Address,
   amountIn: bigint,
+  options?: { firstSuccess?: boolean },
 ): Promise<{ fee: number; amountOut: bigint } | null> {
-  return bestQuoteAcrossFees(tokenIn, tokenOut, amountIn);
+  return bestQuoteAcrossFees(tokenIn, tokenOut, amountIn, options);
 }
+
+const MULTI_HOP_FEE_PAIRS: ReadonlyArray<readonly [number, number]> = [
+  [3_000, 3_000],
+  [10_000, 10_000],
+  [500, 3_000],
+  [3_000, 500],
+  [10_000, 3_000],
+  [3_000, 10_000],
+  [500, 500],
+  [100, 3_000],
+];
 
 async function quoteMultiHopRoute(
   tokenIn: Address,
@@ -214,8 +405,43 @@ async function quoteMultiHopRoute(
   intermediate: Address,
   intermediateLabel: string,
   symbol: string,
+  options?: { firstSuccess?: boolean },
 ): Promise<RouteQuote | null> {
-  const firstHop = await quoteHop(tokenIn, intermediate, amountIn);
+  // One quoter call per fee pair is cheaper and more accurate than quoting
+  // hop 1 then hop 2 independently (the second hop used a synthetic amount).
+  let best: RouteQuote | null = null;
+
+  for (const [feeIn, feeOut] of MULTI_HOP_FEE_PAIRS) {
+    const hops: RouteHop[] = [
+      { tokenIn, tokenOut: intermediate, fee: feeIn },
+      { tokenIn: intermediate, tokenOut: WLD_ADDRESS, fee: feeOut },
+    ];
+    const amountOut = await quoteExactInputPath(hops, amountIn);
+    if (!amountOut || amountOut <= BigInt(0)) {
+      continue;
+    }
+
+    const route: RouteQuote = {
+      hops,
+      amountOut,
+      label: `${symbol} → ${intermediateLabel} → WLD`,
+    };
+
+    if (options?.firstSuccess) {
+      return route;
+    }
+
+    if (!best || amountOut > best.amountOut) {
+      best = route;
+    }
+  }
+
+  if (best) {
+    return best;
+  }
+
+  // Fallback: independent hops if packed-path quoting reverts on this pool.
+  const firstHop = await quoteHop(tokenIn, intermediate, amountIn, options);
   if (!firstHop) {
     return null;
   }
@@ -224,6 +450,7 @@ async function quoteMultiHopRoute(
     intermediate,
     WLD_ADDRESS,
     firstHop.amountOut,
+    options,
   );
 
   if (!secondHop) {
@@ -244,16 +471,100 @@ async function quoteMultiHopRoute(
   };
 }
 
-export async function quoteRouteToWld(
+async function quoteRouteToWldOnce(
   token: WalletToken,
+  tokenIn: Address,
+  amountIn: bigint,
+  options?: { directOnly?: boolean; firstSuccess?: boolean },
 ): Promise<RouteQuote | null> {
-  const cacheKey = routeCacheKey(token.address, token.balance);
-  const cached = getCachedRoute(cacheKey);
-  if (cached !== undefined) {
-    return cached;
+  // Prefer direct WLD, then WETH/USDC bridges — best amount wins.
+  const directHop = await bestQuoteAcrossFees(tokenIn, WLD_ADDRESS, amountIn, {
+    firstSuccess: options?.firstSuccess,
+  });
+  if (directHop && directHop.amountOut > BigInt(0)) {
+    return {
+      hops: [{ tokenIn, tokenOut: WLD_ADDRESS, fee: directHop.fee }],
+      amountOut: directHop.amountOut,
+      label: `${token.symbol} → WLD`,
+    };
   }
 
-  if (token.cachedRoute) {
+  if (options?.directOnly) {
+    return null;
+  }
+
+  const hopOpts = { firstSuccess: options?.firstSuccess };
+  const bridges: Array<{ intermediate: Address; label: string }> = [
+    { intermediate: WETH_ADDRESS, label: 'WETH' },
+    { intermediate: USDC_ADDRESS, label: 'USDC' },
+  ];
+
+  // Fast scan: try bridges sequentially and stop at the first hit.
+  if (options?.firstSuccess) {
+    for (const bridge of bridges) {
+      const route = await quoteMultiHopRoute(
+        tokenIn,
+        amountIn,
+        bridge.intermediate,
+        bridge.label,
+        token.symbol,
+        hopOpts,
+      );
+      if (route && route.amountOut > BigInt(0)) {
+        return route;
+      }
+    }
+    return null;
+  }
+
+  // Full scan: compare both bridges for best amountOut (still sequential).
+  let best: RouteQuote | null = null;
+  for (const bridge of bridges) {
+    const route = await quoteMultiHopRoute(
+      tokenIn,
+      amountIn,
+      bridge.intermediate,
+      bridge.label,
+      token.symbol,
+      hopOpts,
+    );
+    if (
+      route &&
+      route.amountOut > BigInt(0) &&
+      (!best || route.amountOut > best.amountOut)
+    ) {
+      best = route;
+    }
+  }
+  return best;
+}
+
+export type QuoteRouteOptions = {
+  /** Skip WETH/USDC bridges — used for the instant Home pass. */
+  directOnly?: boolean;
+  /** Skip the 180ms silent retry. */
+  skipRetry?: boolean;
+  /** Return first positive fee tier (fast scan). */
+  firstSuccess?: boolean;
+};
+
+export async function quoteRouteToWld(
+  token: WalletToken,
+  options?: QuoteRouteOptions,
+): Promise<RouteQuote | null> {
+  // Namespace by strategy so fast-scan firstSuccess never poisons build-sweep.
+  const strategy = options?.firstSuccess ? 'first' : 'best';
+  const cacheKey = routeCacheKey(token.address, token.balance, strategy);
+  // Direct-only misses must not poison the full-route cache.
+  const useSharedCache = !options?.directOnly;
+  if (useSharedCache) {
+    const cached = getCachedRoute(cacheKey);
+    if (cached !== undefined) {
+      return cached;
+    }
+  }
+
+  if (token.cachedRoute && !options?.directOnly) {
     const route = deserializeRoute(token.cachedRoute);
     setCachedRoute(cacheKey, route);
     return route;
@@ -263,36 +574,58 @@ export async function quoteRouteToWld(
   const amountIn = BigInt(token.balance);
 
   if (amountIn <= BigInt(0)) {
-    setCachedRoute(cacheKey, null);
+    if (useSharedCache) {
+      setCachedRoute(cacheKey, null);
+    }
     return null;
   }
 
-  const acceptQuote = (route: RouteQuote): RouteQuote | null =>
-    route.amountOut >= MIN_WLD_OUT_WEI ? route : null;
-
-  const directHop = await bestQuoteAcrossFees(tokenIn, WLD_ADDRESS, amountIn);
-  if (directHop) {
-    const route = acceptQuote({
-      hops: [{ tokenIn, tokenOut: WLD_ADDRESS, fee: directHop.fee }],
-      amountOut: directHop.amountOut,
-      label: `${token.symbol} → WLD`,
+  // Return any positive quoter route. MIN_WLD_OUT is enforced by callers
+  // (forage-scan / build-sweep) so under-min tokens are labeled output_too_small
+  // instead of being misreported as no_liquidity.
+  let route: RouteQuote | null = null;
+  let transportFailed = false;
+  try {
+    route = await quoteRouteToWldOnce(token, tokenIn, amountIn, {
+      directOnly: options?.directOnly,
+      firstSuccess: options?.firstSuccess,
     });
-    setCachedRoute(cacheKey, route);
-    return route;
+  } catch (error) {
+    if (!isQuoterTransportError(error)) {
+      throw error;
+    }
+    route = null;
+    transportFailed = true;
   }
 
-  const multiHopRoutes = await Promise.all([
-    quoteMultiHopRoute(tokenIn, amountIn, WETH_ADDRESS, 'WETH', token.symbol),
-    quoteMultiHopRoute(tokenIn, amountIn, USDC_ADDRESS, 'USDC', token.symbol),
-  ]);
+  // Only retry on transport failures — not when all fee tiers / bridges
+  // returned a definitive no-pool null (that just doubles Alchemy CU).
+  if (!route && transportFailed && !options?.skipRetry) {
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 280));
+      route = await quoteRouteToWldOnce(token, tokenIn, amountIn, {
+        directOnly: options?.directOnly,
+        firstSuccess: options?.firstSuccess,
+      });
+      transportFailed = false;
+    } catch (error) {
+      if (!isQuoterTransportError(error)) {
+        throw error;
+      }
+      route = null;
+      transportFailed = true;
+    }
+  }
 
-  const route =
-    multiHopRoutes
-      .map((candidate) => (candidate ? acceptQuote(candidate) : null))
-      .filter((candidate): candidate is RouteQuote => candidate !== null)
-      .sort((a, b) => (a.amountOut > b.amountOut ? -1 : 1))[0] ?? null;
+  if (transportFailed && !route) {
+    throw new QuoteTransportError(
+      `Quote RPC failed for ${token.symbol || token.address}`,
+    );
+  }
 
-  setCachedRoute(cacheKey, route);
+  if (useSharedCache) {
+    setCachedRoute(cacheKey, route);
+  }
   return route;
 }
 

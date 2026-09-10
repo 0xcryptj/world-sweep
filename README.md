@@ -1,4 +1,4 @@
-# World Mini App
+# Forager
 
 A World App mini app that lets users sell junk mini-app tokens from their World Chain wallet in **one batched transaction** and receive native **WLD**. The app takes a **5% platform fee** on the WLD received from swaps.
 
@@ -27,11 +27,13 @@ Copy `.env.sample` to `.env.local` and fill in:
 | Variable | Description |
 | --- | --- |
 | `AUTH_SECRET` | Random secret for NextAuth (`openssl rand -base64 32`) |
-| `AUTH_URL` | Your ngrok or production URL |
+| `AUTH_URL` | `https://forag3r.app/world` in production (must include `/world`) |
+| `NEXT_PUBLIC_BASE_PATH` | `/world` — subpath on forag3r.app |
+| `NEXT_PUBLIC_SITE_URL` | `https://forag3r.app/world` |
 | `NEXT_PUBLIC_APP_ID` | App ID from [developer.worldcoin.org](https://developer.worldcoin.org) |
 | `NEXT_PUBLIC_PLATFORM_FEE_WALLET` | Your World wallet address for the 5% fee |
 | `ALCHEMY_API_KEY` | Free API key from [alchemy.com](https://www.alchemy.com) (World Chain token balances) |
-| `NEXT_PUBLIC_WORLDCHAIN_RPC_URL` | Optional; defaults to Alchemy public RPC. Use `https://worldchain-mainnet.g.alchemy.com/v2/YOUR_KEY` with the same key |
+| `NEXT_PUBLIC_WORLDCHAIN_RPC_URL` | Optional, **keyless only** (ships in the client bundle). Defaults to `https://worldchain-mainnet.g.alchemy.com/public`. NEVER put an API-keyed URL here — the server builds its own keyed endpoint from `ALCHEMY_API_KEY`. |
 
 ### 3. Developer Portal setup
 
@@ -48,12 +50,25 @@ In [developer.worldcoin.org](https://developer.worldcoin.org) → your mini app 
 
 ```bash
 npm run dev
-cloudflared tunnel --url http://localhost:3000
+# App runs at http://localhost:3000/world
 ```
 
-Point your mini app URL in the Developer Portal to your Cloudflare tunnel URL (or ngrok if you prefer).
+For World App testing, tunnel the dev server and include `/world` in the portal URL:
 
-### 5. Test in World App
+```bash
+cloudflared tunnel --url http://localhost:3000
+# Portal integration URL: https://YOUR_TUNNEL.trycloudflare.com/world
+```
+
+### 5. Deploy on forag3r.app/world
+
+This app is hosted under the parent Forager site at **https://forag3r.app/world**.
+
+1. Deploy this repo to Vercel (see `deploy/PARENT_INTEGRATION.md`)
+2. Set `WORLD_MINIAPP_ORIGIN` on the parent `defiproject/forager` Vercel project
+3. Set World Developer Portal integration URL to `https://forag3r.app/world/enter`
+
+### 6. Test in World App
 
 Use the Developer Portal testing flow to open the app inside World App on your phone.
 

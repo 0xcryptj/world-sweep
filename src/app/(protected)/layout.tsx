@@ -1,4 +1,5 @@
 import { auth } from '@/auth';
+import { InviteAttributionBootstrap } from '@/components/Growth/InviteAttributionBootstrap';
 import { Navigation } from '@/components/Navigation';
 import { Page } from '@/components/PageLayout';
 import { redirect } from 'next/navigation';
@@ -12,11 +13,12 @@ export default async function TabsLayout({
 
   // If the user is not authenticated, redirect to the login page
   if (!session) {
-    redirect('/');
+    redirect('/enter');
   }
 
   return (
-    <Page className="h-dvh">
+    <Page className="relative z-10 h-dvh">
+      <InviteAttributionBootstrap />
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {children}
       </div>

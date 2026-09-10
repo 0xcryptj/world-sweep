@@ -1,0 +1,18 @@
+{
+  "title": "Forager Quick Action",
+  "app_id": "app_a05e0d4389f6fa77f5380724caf300bb",
+  "submit_form": "https://forms.gle/UBcKMrnxtyxqX4dq6",
+  "schema": "https://world.org/mini-app?app_id=app_a05e0d4389f6fa77f5380724caf300bb&path={path}",
+  "paths": {
+    "forage": "/home",
+    "invite": "/invite?code={CODE}"
+  },
+  "example_links": {
+    "open_forage": "https://world.org/mini-app?app_id=app_a05e0d4389f6fa77f5380724caf300bb&path=%2Fhome",
+    "invite_example": "https://world.org/mini-app?app_id=app_a05e0d4389f6fa77f5380724caf300bb&path=%2Finvite%3Fcode%3D0x12abcd"
+  },
+  "partner_outreach": [
+    "Ask swap / portfolio / claim mini apps to deep-link into Forager after airdrops",
+    "Offer sourceAppId hand-back so they can return users"
+  ]
+}

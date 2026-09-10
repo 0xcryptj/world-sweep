@@ -84,6 +84,27 @@ function mapSupabaseRow(row: Record<string, unknown>): ForageEvent {
   };
 }
 
+/**
+ * Dedupe check: has a forage already been recorded for this on-chain tx?
+ * Tx hashes are stored lowercased; comparison is case-insensitive to cover
+ * any legacy rows recorded before normalization.
+ */
+export async function hasForageEventForTx(txHash: string): Promise<boolean> {
+  const normalized = txHash.toLowerCase();
+
+  if (getSupabaseConfig()) {
+    const rows = await supabaseFetch<Array<{ id: string }>>(
+      `forage_events?select=id&tx_hash=ilike.${encodeURIComponent(normalized)}&limit=1`,
+    );
+    return rows.length > 0;
+  }
+
+  const events = await readFileEvents();
+  return events.some(
+    (event) => event.txHash?.toLowerCase() === normalized,
+  );
+}
+
 export async function recordForageEvent(input: {
   walletAddress: string;
   username?: string | null;
@@ -105,7 +126,7 @@ export async function recordForageEvent(input: {
     wldReceived,
     tokensSwapped: input.tokensSwapped,
     userOpHash: input.userOpHash ?? null,
-    txHash: input.txHash ?? null,
+    txHash: input.txHash ? input.txHash.toLowerCase() : null,
     createdAt,
   };
 

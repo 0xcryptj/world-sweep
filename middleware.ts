@@ -11,10 +11,10 @@ export default auth((req) => {
   );
 
   if (isProtected && !isAuthenticated) {
-    return NextResponse.redirect(new URL('/', req.url));
+    return NextResponse.redirect(new URL('/enter', req.url));
   }
 
-  if (pathname === '/' && isAuthenticated) {
+  if ((pathname === '/' || pathname === '/enter') && isAuthenticated) {
     return NextResponse.redirect(new URL('/home', req.url));
   }
 
@@ -22,5 +22,5 @@ export default auth((req) => {
 });
 
 export const config = {
-  matcher: ['/', '/home/:path*', '/wallet/:path*', '/profile/:path*'],
+  matcher: ['/', '/enter', '/home/:path*', '/wallet/:path*', '/profile/:path*'],
 };

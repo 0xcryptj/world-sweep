@@ -39,6 +39,17 @@ export const erc20Abi = [
   },
   {
     type: 'function',
+    name: 'transferFrom',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'from', type: 'address' },
+      { name: 'to', type: 'address' },
+      { name: 'amount', type: 'uint256' },
+    ],
+    outputs: [{ type: 'bool' }],
+  },
+  {
+    type: 'function',
     name: 'approve',
     stateMutability: 'nonpayable',
     inputs: [
@@ -106,6 +117,12 @@ export const permit2Abi = [
   },
 ] as const;
 
+/**
+ * World Chain's Uniswap router (0x091AD9...) is SwapRouter02: its
+ * exactInputSingle/exactInput structs have NO `deadline` field. Encoding the
+ * legacy V1 SwapRouter signatures (which include deadline) produces selectors
+ * the contract doesn't implement, so every swap reverts in simulation.
+ */
 export const swapRouterAbi = [
   {
     type: 'function',
@@ -120,7 +137,6 @@ export const swapRouterAbi = [
           { name: 'tokenOut', type: 'address' },
           { name: 'fee', type: 'uint24' },
           { name: 'recipient', type: 'address' },
-          { name: 'deadline', type: 'uint256' },
           { name: 'amountIn', type: 'uint256' },
           { name: 'amountOutMinimum', type: 'uint256' },
           { name: 'sqrtPriceLimitX96', type: 'uint160' },
@@ -140,7 +156,6 @@ export const swapRouterAbi = [
         components: [
           { name: 'path', type: 'bytes' },
           { name: 'recipient', type: 'address' },
-          { name: 'deadline', type: 'uint256' },
           { name: 'amountIn', type: 'uint256' },
           { name: 'amountOutMinimum', type: 'uint256' },
         ],

@@ -1,6 +1,7 @@
 'use client';
 
 import type { AppError } from '@/lib/errors';
+import { sanitizeErrorDetails } from '@/lib/safe-error';
 
 type ErrorBannerProps = {
   error: AppError;
@@ -8,25 +9,26 @@ type ErrorBannerProps = {
 };
 
 export function ErrorBanner({ error, onDismiss }: ErrorBannerProps) {
+  const safeDetails = sanitizeErrorDetails(error.details);
   return (
     <div
       role="alert"
-      className="rounded-2xl border border-app-purple/40 bg-app-purple/10 px-4 py-3 text-sm text-foreground"
+      className="forager-notice shrink-0 text-[15px] text-foreground"
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="space-y-1">
+        <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            <p className="font-semibold">{error.title}</p>
+            <p className="forager-title">{error.title}</p>
             {error.code && (
-              <span className="rounded-full bg-app-purple/20 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-app-purple-bright">
+              <span className="rounded-full bg-forager-accent/15 px-2 py-0.5 text-[12px] text-forager-accent">
                 {error.code.replaceAll('_', ' ')}
               </span>
             )}
           </div>
-          <p className="text-app-text-muted">{error.message}</p>
-          {error.details && (
-            <p className="app-glass-subtle rounded-xl px-3 py-2 text-xs text-app-text-muted">
-              {error.details}
+          <p className="forager-subtitle">{error.message}</p>
+          {safeDetails && (
+            <p className="rounded-xl bg-forager-bg-elevated px-3 py-2 text-xs text-forager-text-muted">
+              {safeDetails}
             </p>
           )}
         </div>
@@ -34,7 +36,7 @@ export function ErrorBanner({ error, onDismiss }: ErrorBannerProps) {
           <button
             type="button"
             onClick={onDismiss}
-            className="shrink-0 text-xs font-medium text-app-purple underline"
+            className="forager-text-action"
           >
             Dismiss
           </button>

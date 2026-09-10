@@ -1,5 +1,6 @@
 'use client';
 import { SplashGate } from '@/components/SplashScreen/SplashGate';
+import { getAuthBasePath } from '@/lib/base-path';
 import { MiniKitEventSetup } from '@/providers/MiniKitEventSetup';
 import { MiniKitProvider } from '@worldcoin/minikit-js/minikit-provider';
 import { Session } from 'next-auth';
@@ -43,7 +44,9 @@ export default function ClientProviders({
       >
         <MiniKitEventSetup />
         <SplashGate>
-          <SessionProvider session={session}>{children}</SessionProvider>
+          <SessionProvider session={session} basePath={getAuthBasePath()}>
+            {children}
+          </SessionProvider>
         </SplashGate>
       </MiniKitProvider>
     </ErudaProvider>

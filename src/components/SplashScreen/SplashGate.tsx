@@ -2,11 +2,10 @@
 
 import { hapticImpact } from '@/lib/haptics';
 import { useMiniKit } from '@worldcoin/minikit-js/minikit-provider';
-import { ReactNode, useEffect, useState } from 'react';
-import { SplashScreen } from './index';
+import { ReactNode, useCallback, useEffect, useState } from 'react';
+import { Preloader } from '@/components/ui/preloader';
 
-const MIN_SPLASH_MS = 2800;
-const EXIT_ANIMATION_MS = 850;
+const MIN_SPLASH_MS = 1600;
 
 type SplashGateProps = {
   children: ReactNode;
@@ -15,8 +14,7 @@ type SplashGateProps = {
 export function SplashGate({ children }: SplashGateProps) {
   const { isInstalled } = useMiniKit();
   const [minTimeElapsed, setMinTimeElapsed] = useState(false);
-  const [exiting, setExiting] = useState(false);
-  const [visible, setVisible] = useState(true);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setMinTimeElapsed(true), MIN_SPLASH_MS);
@@ -24,23 +22,22 @@ export function SplashGate({ children }: SplashGateProps) {
   }, []);
 
   const miniKitReady = isInstalled !== undefined;
-  const ready = minTimeElapsed && miniKitReady;
 
   useEffect(() => {
-    if (!ready || exiting) {
+    if (!minTimeElapsed || !miniKitReady || ready) {
       return;
     }
+    void hapticImpact('medium');
+    setReady(true);
+  }, [minTimeElapsed, miniKitReady, ready]);
 
+  const onComplete = useCallback(() => {
     void hapticImpact('light');
-    setExiting(true);
-
-    const timer = window.setTimeout(() => setVisible(false), EXIT_ANIMATION_MS);
-    return () => window.clearTimeout(timer);
-  }, [exiting, ready]);
+  }, []);
 
   return (
     <>
-      <SplashScreen visible={visible} exiting={exiting} />
+      <Preloader ready={ready} onComplete={onComplete} />
       {children}
     </>
   );

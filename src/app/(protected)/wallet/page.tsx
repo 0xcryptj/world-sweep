@@ -8,15 +8,14 @@ export default async function WalletPage() {
 
   return (
     <>
-      <Page.Header className="p-0">
+      <Page.Header>
         <AppHeader
           title="Wallet"
-          subtitle="Your World Chain balances"
           username={session?.user?.username}
           profilePictureUrl={session?.user?.profilePictureUrl}
         />
       </Page.Header>
-      <Page.Main className="flex flex-col items-stretch justify-start gap-4 pb-4">
+      <Page.Main className="flex flex-col items-stretch justify-start">
         <WalletPanel />
       </Page.Main>
     </>

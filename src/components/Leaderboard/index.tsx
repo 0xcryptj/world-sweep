@@ -5,6 +5,9 @@ import {
   shortenAddress,
   type LeaderboardResponse,
 } from '@/lib/forage-stats-types';
+import { BRAND_COPY } from '@/lib/branding';
+import { apiPath } from '@/lib/base-path';
+import { SectionHeader } from '@/components/SectionHeader';
 import { Marble } from '@worldcoin/mini-apps-ui-kit-react';
 import { useEffect, useState } from 'react';
 
@@ -20,7 +23,7 @@ export function LeaderboardPanel({ compact = false }: LeaderboardPanelProps) {
   useEffect(() => {
     void (async () => {
       try {
-        const response = await fetch('/api/leaderboard');
+        const response = await fetch(apiPath('/leaderboard'));
         const payload = (await response.json()) as LeaderboardResponse & {
           error?: string;
         };
@@ -44,25 +47,26 @@ export function LeaderboardPanel({ compact = false }: LeaderboardPanelProps) {
 
   if (loading) {
     return (
-      <p className="app-subtitle text-sm">Loading leaderboard...</p>
+      <p className="forager-subtitle text-sm">Loading leaderboard...</p>
     );
   }
 
   if (error || !data) {
     return (
-      <p className="app-subtitle text-sm">
+      <p className="forager-subtitle text-sm">
         {error ?? 'Leaderboard unavailable right now.'}
       </p>
     );
   }
 
   return (
-    <div className="flex w-full flex-col gap-4">
+    <div className="forager-section">
       {!compact ? (
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-3 gap-3">
           <MetricCard
-            label="WLD reclaimed"
+            label={BRAND_COPY.globalReclaimed}
             value={`${formatWldAmount(data.stats.totalWldReclaimed)} WLD`}
+            brass
           />
           <MetricCard
             label="Forages"
@@ -74,68 +78,71 @@ export function LeaderboardPanel({ compact = false }: LeaderboardPanelProps) {
           />
         </div>
       ) : (
-        <p className="app-subtitle text-xs">
-          {formatWldAmount(data.stats.totalWldReclaimed)} WLD reclaimed globally
-          · {data.stats.totalForagers} foragers
-        </p>
+        <SectionHeader title="Leaderboard" />
       )}
 
-      <div className="app-card rounded-2xl p-4">
-        <p className="app-title mb-3 text-base font-semibold">
-          Top reclaimers
-        </p>
-
+      <div className="forager-group">
         {data.leaderboard.length === 0 ? (
-          <p className="app-subtitle text-sm">
+          <p className="px-4 py-4 text-[15px] text-forager-text-muted">
             No forages recorded yet. Be the first to reclaim junk into WLD.
           </p>
         ) : (
-          <ol className="space-y-2">
-            {data.leaderboard.map((entry, index) => (
-              <li
-                key={entry.walletAddress}
-                className="app-glass-subtle flex items-center justify-between gap-3 rounded-xl px-3 py-2"
-              >
-                <div className="flex min-w-0 items-center gap-3">
-                  <span className="w-5 shrink-0 text-sm font-bold text-app-purple">
-                    {index + 1}
-                  </span>
-                  {entry.profilePictureUrl ? (
-                    <Marble src={entry.profilePictureUrl} className="w-9" />
-                  ) : (
-                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-app-surface text-xs font-bold text-app-purple">
-                      {entry.username?.slice(0, 1).toUpperCase() ?? '?'}
-                    </div>
-                  )}
-                  <div className="min-w-0">
-                    <p className="truncate font-medium">
-                      {entry.username ?? shortenAddress(entry.walletAddress)}
-                    </p>
-                    <p className="app-subtitle text-xs">
-                      {entry.forageCount} forage
-                      {entry.forageCount === 1 ? '' : 's'}
-                    </p>
+          data.leaderboard.map((entry, index) => (
+            <div
+              key={entry.walletAddress}
+              className="forager-group-row flex items-center justify-between gap-3 px-4 py-3.5"
+            >
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="forager-value-green w-5 shrink-0 text-[15px]">
+                  {index + 1}
+                </span>
+                {entry.profilePictureUrl ? (
+                  <Marble src={entry.profilePictureUrl} className="w-9" />
+                ) : (
+                  <div className="forager-title flex h-9 w-9 items-center justify-center rounded-full bg-forager-surface text-xs text-forager-accent">
+                    {entry.username?.slice(0, 1).toUpperCase() ?? '?'}
                   </div>
+                )}
+                <div className="min-w-0">
+                  <p className="forager-title truncate text-[17px]">
+                    {entry.username ?? shortenAddress(entry.walletAddress)}
+                  </p>
+                  <p className="mt-0.5 text-[13px] text-forager-text-muted">
+                    {entry.forageCount} forage
+                    {entry.forageCount === 1 ? '' : 's'}
+                  </p>
                 </div>
-                <p className="shrink-0 text-sm font-semibold text-app-purple">
-                  {formatWldAmount(entry.totalWld)} WLD
-                </p>
-              </li>
-            ))}
-          </ol>
+              </div>
+              <p className="forager-value-brass shrink-0 text-[15px]">
+                {formatWldAmount(entry.totalWld)} WLD
+              </p>
+            </div>
+          ))
         )}
       </div>
     </div>
   );
 }
 
-function MetricCard({ label, value }: { label: string; value: string }) {
+function MetricCard({
+  label,
+  value,
+  brass = false,
+}: {
+  label: string;
+  value: string;
+  brass?: boolean;
+}) {
   return (
-    <div className="app-card rounded-2xl p-3 text-center">
-      <p className="app-subtitle text-[11px] uppercase tracking-wide">
-        {label}
+    <div className="forager-group p-3 text-center">
+      <p className="text-[12px] text-forager-text-muted">{label}</p>
+      <p
+        className={`mt-1 text-sm ${
+          brass ? 'forager-value-brass' : 'forager-value-green'
+        }`}
+      >
+        {value}
       </p>
-      <p className="mt-1 text-sm font-bold text-app-purple">{value}</p>
     </div>
   );
 }

@@ -1,27 +1,18 @@
 import { auth } from '@/auth';
+import { APP_LOGO_SRC } from '@/lib/branding';
+import { WorldAtmosphere } from '@/components/WorldAtmosphere';
 import ClientProviders from '@/providers';
 import '@worldcoin/mini-apps-ui-kit-react/styles.css';
 import type { Metadata } from 'next';
-import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 
-const geistSans = Geist({
-  variable: '--font-geist-sans',
-  subsets: ['latin'],
-});
-
-const geistMono = Geist_Mono({
-  variable: '--font-geist-mono',
-  subsets: ['latin'],
-});
-
 export const metadata: Metadata = {
-  title: 'World Mini App',
+  title: 'Forager',
   description:
-    'Convert junk mini-app tokens into WLD in one transaction. 5% platform fee on WLD received.',
+    'Surface junk tokens on World Chain and reclaim them as WLD. You approve every step.',
   icons: {
-    icon: '/assets/pics/app-logo.png',
-    apple: '/assets/pics/app-logo.png',
+    icon: APP_LOGO_SRC,
+    apple: APP_LOGO_SRC,
   },
 };
 
@@ -33,9 +24,11 @@ export default async function RootLayout({
   const session = await auth();
   return (
     <html lang="en" className="overflow-x-hidden">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} overflow-x-hidden bg-app-bg text-foreground antialiased`}
-      >
+      <head>
+        <link rel="preload" as="image" href={APP_LOGO_SRC} />
+      </head>
+      <body className="relative overflow-x-hidden bg-forager-bg text-foreground antialiased">
+        <WorldAtmosphere />
         <ClientProviders session={session}>{children}</ClientProviders>
       </body>
     </html>

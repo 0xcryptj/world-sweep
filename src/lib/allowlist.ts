@@ -1,19 +1,23 @@
 import {
+  MALICIOUS_TOKEN_ADDRESSES,
   PERMIT2_ADDRESS,
+  UNISWAP_APPROVAL_SWAP,
   UNISWAP_V3_SWAP_ROUTER,
   WLD_ADDRESS,
 } from './constants';
 
-/** Core contracts called directly (router, permit2, WLD fee transfer). */
+/** Core contracts called directly (router, ApprovalSwap, Permit2, WLD fee transfer). */
 export const PORTAL_CORE_CONTRACTS = [
   UNISWAP_V3_SWAP_ROUTER,
+  UNISWAP_APPROVAL_SWAP,
   PERMIT2_ADDRESS,
   WLD_ADDRESS,
 ] as const;
 
 /**
- * ERC-20 tokens allowlisted for Permit2 in the Developer Portal.
- * Synced from wallet scan — add new addresses when users hold new junk tokens.
+ * Seed ERC-20s for Developer Portal Permit2 + Contract Entrypoints.
+ * Runtime sync merges scan-discovered forageable tokens on top of this list.
+ * Malicious addresses are filtered out of portal payloads even if present here.
  */
 export const PORTAL_PERMIT2_TOKEN_ADDRESSES = [
   '0x024598618e805381b0F6A1FA0B7AF6304e8C6426',
@@ -58,7 +62,6 @@ export const PORTAL_PERMIT2_TOKEN_ADDRESSES = [
   '0xdCE6A2D414021d27a52c80aEe486f2603dCD7DF1',
   '0x00471C596755C5EB197a3e43683534b4858C2c0f',
   '0x161fc028ad7B35684fa1600911bd7CC596aDE326',
-  '0x8206cecc0EEdE8C1F85AC1A1115eE42Aa145bEFE',
   '0xAA8F08307B6604ab43075d2d34AbD0F1E616C17c',
   '0xd0f6073e4d2DDee62D3232b2FEBA47D3E78da254',
   '0xDB0207bD76d6774aAa247376B7d9E5Dd09460843',
@@ -72,12 +75,10 @@ export const PORTAL_PERMIT2_TOKEN_ADDRESSES = [
   '0x10A115DBC188B5217Cf914FDfa1B39104f203868',
   '0x5470aeFbAC2ac629EFC2Fa15d58b3c8Cba53430d',
   '0x6516160A8278420A9af7cb536279d4eF833c58Ab',
-  '0xA29b7a179aDc80D628cC5A7c7a181920c2325762',
   '0xD93f185C84E66771cAfc885Aaf43fa0d4ed27612',
   '0xc0770f844586c465917Fc04f2D6b8C40a3AF7313',
   '0x5C1D4ac802413f30A102146D735b1722F103277C',
   '0x67f8f778bfE29b381c8437DC12E75BFA0977630c',
-  '0x8092511af4eCD82461E3F214Cfe07261C16A7979',
   '0x998e211ECf67E09C53b2D95805d735135ac50A5a',
   '0xE0D58bbe48285D28875d6396BF1f944E9797931B',
   '0xED614608D8239c8fAeb869Fa3e275498B302E58a',
@@ -95,26 +96,126 @@ export const PORTAL_PERMIT2_TOKEN_ADDRESSES = [
   WLD_ADDRESS,
 ] as const;
 
+/**
+ * Frequently liquid World Chain bags discovered by forage scans.
+ * Always queued into Supabase + Developer Portal sync — never added to the
+ * seed Permit2 list until portal sync succeeds (seed bypasses soft-skip and
+ * causes World App `invalid_contract` on the whole batch).
+ */
+export const KNOWN_LIQUID_PORTAL_TOKENS = [
+  {
+    address: '0xF3F92A60e6004f3982F0FdE0d43602fC0a30a0dB',
+    symbol: 'ORB',
+  },
+  {
+    address: '0xcd1E32B86953D79a6AC58e813D2EA7a1790cAb63',
+    symbol: 'ORO',
+  },
+  {
+    address: '0xab09A728E53d3d6BC438BE95eeD46Da0Bbe7FB38',
+    symbol: 'SUSHI',
+  },
+] as const;
+
 /** @deprecated Use PORTAL_PERMIT2_TOKEN_ADDRESSES */
 export const PORTAL_PERMIT2_TOKENS = PORTAL_PERMIT2_TOKEN_ADDRESSES;
 
+const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
+
+export function normalizePortalAddress(address: string): string | null {
+  const trimmed = address.trim();
+  if (!ADDRESS_RE.test(trimmed)) {
+    return null;
+  }
+  return trimmed.toLowerCase();
+}
+
+export function isMaliciousPortalAddress(address: string): boolean {
+  const normalized = normalizePortalAddress(address);
+  return normalized ? MALICIOUS_TOKEN_ADDRESSES.has(normalized) : true;
+}
+
+export function isSafePortalTokenAddress(address: string): boolean {
+  const normalized = normalizePortalAddress(address);
+  if (!normalized) {
+    return false;
+  }
+  return !MALICIOUS_TOKEN_ADDRESSES.has(normalized);
+}
+
 /**
  * Contract entrypoints for Developer Portal — core infra plus every ERC-20
- * we may call directly (e.g. WLD fee transfer).
+ * we may call directly via approve()/transfer (World checks `to` addresses).
  */
-export const PORTAL_CONTRACTS = [
-  ...PORTAL_CORE_CONTRACTS,
-  ...PORTAL_PERMIT2_TOKEN_ADDRESSES,
-] as const;
+export function buildPortalContracts(tokenAddresses: readonly string[]): string[] {
+  const merged = new Set<string>();
+  for (const address of PORTAL_CORE_CONTRACTS) {
+    const normalized = normalizePortalAddress(address);
+    if (normalized) {
+      merged.add(normalized);
+    }
+  }
+  for (const address of tokenAddresses) {
+    const normalized = normalizePortalAddress(address);
+    if (normalized && isSafePortalTokenAddress(normalized)) {
+      merged.add(normalized);
+    }
+  }
+  return [...merged];
+}
 
-const permit2Set = new Set(
-  PORTAL_PERMIT2_TOKEN_ADDRESSES.map((address) => address.toLowerCase()),
+export function buildPortalPermit2Tokens(
+  tokenAddresses: readonly string[],
+): string[] {
+  const merged = new Set<string>();
+  for (const address of tokenAddresses) {
+    const normalized = normalizePortalAddress(address);
+    if (normalized && isSafePortalTokenAddress(normalized)) {
+      merged.add(normalized);
+    }
+  }
+  const wld = normalizePortalAddress(WLD_ADDRESS);
+  if (wld) {
+    merged.add(wld);
+  }
+  return [...merged];
+}
+
+export const PORTAL_CONTRACTS = buildPortalContracts(
+  PORTAL_PERMIT2_TOKEN_ADDRESSES,
 );
 
+const seedPermit2Set = new Set(
+  PORTAL_PERMIT2_TOKEN_ADDRESSES.map((address) => address.toLowerCase()).filter(
+    (address) => !MALICIOUS_TOKEN_ADDRESSES.has(address),
+  ),
+);
+
+/** Sync check against the static seed (plus in-memory dynamic overlay). */
+let dynamicPermit2Overlay = new Set<string>();
+
+export function setDynamicPermit2Overlay(addresses: Iterable<string>): void {
+  const next = new Set<string>();
+  for (const address of addresses) {
+    const normalized = normalizePortalAddress(address);
+    if (normalized && isSafePortalTokenAddress(normalized)) {
+      next.add(normalized);
+    }
+  }
+  dynamicPermit2Overlay = next;
+}
+
 export function isPermit2Allowlisted(address: string): boolean {
-  return permit2Set.has(address.toLowerCase());
+  const normalized = normalizePortalAddress(address);
+  if (!normalized) {
+    return false;
+  }
+  return seedPermit2Set.has(normalized) || dynamicPermit2Overlay.has(normalized);
 }
 
 export function getUnlistedTokenAddresses(addresses: string[]): string[] {
   return addresses.filter((address) => !isPermit2Allowlisted(address));
 }
+
+export const ALLOWLIST_PENDING_SKIP_REASON =
+  'Allowlist syncing automatically — fully close and reopen World App in a minute, then rescan';

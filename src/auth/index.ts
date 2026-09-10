@@ -1,4 +1,5 @@
 import { hashNonce } from '@/auth/wallet/client-helpers';
+import { getAuthBasePath, getBasePath, withBasePath } from '@/lib/base-path';
 import { MiniKit } from '@worldcoin/minikit-js';
 import type { MiniAppWalletAuthSuccessPayload } from '@worldcoin/minikit-js/commands';
 import { verifySiweMessage } from '@worldcoin/minikit-js/siwe';
@@ -25,8 +26,11 @@ declare module 'next-auth' {
 // For more information on each option (and a full list of options) go to
 // https://authjs.dev/getting-started/authentication/credentials
 export const { handlers, signIn, signOut, auth } = NextAuth({
+  basePath: getAuthBasePath(),
   secret: process.env.AUTH_SECRET,
-  trustHost: process.env.AUTH_TRUST_HOST === 'true',
+  // Vercel/proxy hosts need trustHost; explicit env overrides for local tunnels.
+  trustHost:
+    process.env.AUTH_TRUST_HOST === 'true' || process.env.VERCEL === '1',
   session: { strategy: 'jwt' },
   providers: [
     Credentials({
@@ -71,7 +75,24 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       },
     }),
   ],
+  pages: {
+    signIn: '/enter',
+  },
   callbacks: {
+    redirect({ url, baseUrl }) {
+      const basePath = getBasePath();
+
+      if (url.startsWith('/')) {
+        const origin = baseUrl.replace(/\/$/, '').replace(new RegExp(`${basePath}$`), '');
+        return `${origin}${withBasePath(url)}`;
+      }
+
+      if (url.startsWith(baseUrl)) {
+        return url;
+      }
+
+      return `${baseUrl.replace(/\/$/, '')}${withBasePath('/home')}`;
+    },
     async jwt({ token, user }) {
       if (user) {
         token.userId = user.id;
