@@ -27,7 +27,12 @@ const nextConfig: NextConfig = {
   },
   allowedDevOrigins,
   reactStrictMode: false,
+  // Next 15.5: boolean false hides the N / settings-gear badge entirely.
+  // https://nextjs.org/docs/app/api-reference/config/next-config-js/devIndicators
   devIndicators: false,
+  // Next 15.5 ships webpack 5 (compiled 5.98.0). Keep the hook current — no
+  // webpack 4 plugins, no stale svg/file-loader rules.
+  webpack: (config) => config,
   async headers() {
     // Intentionally conservative: no CSP / X-Frame-Options / frame-ancestors so
     // the World App webview and MiniKit are not broken. These headers are safe

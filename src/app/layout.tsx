@@ -49,6 +49,7 @@ export default async function RootLayout({
       className={`${interTight.variable} ${inter.variable} ${doto.variable} h-dvh overflow-hidden`}
     >
       <head>
+        <meta name="vercel-toolbar" content="disabled" />
         <link rel="preload" as="image" href={APP_LOGO_SRC} />
         <link rel="preload" as="image" href={FORAGE_SPRITE_SRC} />
       </head>

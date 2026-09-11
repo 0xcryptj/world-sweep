@@ -8,21 +8,18 @@ const ASCII_POSTER = withBasePath('/assets/ascii/trippin-spiral.webp');
 
 export function AsciiArt({ className }: { className?: string }) {
   return (
-    <video
-      className={cn(className)}
-      src={ASCII_SRC}
-      poster={ASCII_POSTER}
-      autoPlay
-      loop
-      muted
-      playsInline
-      aria-hidden
-      style={{
-        display: 'block',
-        width: '100%',
-        height: '100%',
-        objectFit: 'contain',
-      }}
-    />
+    <div className={cn('forager-enter-ascii-bleed', className)} aria-hidden>
+      <video
+        src={ASCII_SRC}
+        poster={ASCII_POSTER}
+        autoPlay
+        loop
+        muted
+        playsInline
+        aria-hidden
+        disablePictureInPicture
+        disableRemotePlayback
+      />
+    </div>
   );
 }

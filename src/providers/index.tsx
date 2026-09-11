@@ -1,4 +1,5 @@
 'use client';
+import { DevChromeKiller } from '@/components/DevChromeKiller';
 import { SplashGate } from '@/components/SplashScreen/SplashGate';
 import { getAuthBasePath } from '@/lib/base-path';
 import { MiniKitEventSetup } from '@/providers/MiniKitEventSetup';
@@ -35,8 +36,9 @@ export default function ClientProviders({
   children,
   session,
 }: ClientProvidersProps) {
-  return (
-    <ErudaProvider>
+  const tree = (
+    <>
+      <DevChromeKiller />
       <MiniKitProvider
         props={{
           appId: process.env.NEXT_PUBLIC_APP_ID,
@@ -49,6 +51,12 @@ export default function ClientProviders({
           </SessionProvider>
         </SplashGate>
       </MiniKitProvider>
-    </ErudaProvider>
+    </>
   );
+
+  if (process.env.NODE_ENV !== 'development') {
+    return tree;
+  }
+
+  return <ErudaProvider>{tree}</ErudaProvider>;
 }
