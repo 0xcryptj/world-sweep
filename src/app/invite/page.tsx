@@ -2,7 +2,6 @@
 
 import { ForagerButton } from '@/components/ForagerButton';
 import { Page } from '@/components/PageLayout';
-import { ForagerPixelMark } from '@/components/ForagerPixelMark';
 import { apiPath } from '@/lib/base-path';
 import {
   clearStoredInviteCode,
@@ -63,7 +62,6 @@ function InviteInner() {
 
   return (
     <Page.Main className="flex min-h-[70vh] flex-col items-center justify-center gap-8 text-center">
-      <ForagerPixelMark size={128} className="forager-pixel-mark-enter" />
       <div className="flex flex-col items-center gap-3 overflow-visible">
           <h1 className="forager-display">{APP_NAME}</h1>
           <p className="forager-support-fade text-[17px] leading-[1.35] text-forager-text-muted">

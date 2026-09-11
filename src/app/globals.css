@@ -1693,18 +1693,6 @@ nextjs-portal,
   isolation: isolate;
 }
 
-.forager-signin-lockup {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 1.25rem;
-  overflow: visible;
-}
-
-.forager-signin-forager {
-  flex-shrink: 0;
-}
-
 .forager-signin-world {
   flex-shrink: 0;
   color: #fff;
