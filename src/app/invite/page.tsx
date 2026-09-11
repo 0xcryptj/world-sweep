@@ -2,7 +2,7 @@
 
 import { ForagerButton } from '@/components/ForagerButton';
 import { Page } from '@/components/PageLayout';
-import { ForagerHeroMark } from '@/components/ForagerHeroMark';
+import { ForagerPixelMark } from '@/components/ForagerPixelMark';
 import { apiPath } from '@/lib/base-path';
 import {
   clearStoredInviteCode,
@@ -10,7 +10,7 @@ import {
   sanitizeInviteCode,
   storeInviteCode,
 } from '@/lib/growth';
-import { APP_NAME, APP_TAGLINE } from '@/lib/branding';
+import { APP_NAME, APP_SIGNIN_TAGLINE } from '@/lib/branding';
 import { useSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
@@ -63,10 +63,12 @@ function InviteInner() {
 
   return (
     <Page.Main className="flex min-h-[70vh] flex-col items-center justify-center gap-8 text-center">
-      <ForagerHeroMark size={148} />
-      <div className="flex flex-col items-center gap-3">
+      <ForagerPixelMark size={128} className="forager-pixel-mark-enter" />
+      <div className="flex flex-col items-center gap-3 overflow-visible">
           <h1 className="forager-display">{APP_NAME}</h1>
-          <p className="text-[17px] text-forager-text-muted">{APP_TAGLINE}</p>
+          <p className="forager-support-fade text-[17px] leading-[1.35] text-forager-text-muted">
+            {APP_SIGNIN_TAGLINE}
+          </p>
       </div>
       <p className="forager-subtitle max-w-sm text-[15px]">{message}</p>
       {status === 'unauthenticated' ? (

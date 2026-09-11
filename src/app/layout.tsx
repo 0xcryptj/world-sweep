@@ -5,7 +5,7 @@ import { WorldAtmosphere } from '@/components/WorldAtmosphere';
 import ClientProviders from '@/providers';
 import '@worldcoin/mini-apps-ui-kit-react/styles.css';
 import type { Metadata } from 'next';
-import { Doto, Inter, Inter_Tight } from 'next/font/google';
+import { Inter, Inter_Tight } from 'next/font/google';
 import './globals.css';
 
 const interTight = Inter_Tight({
@@ -17,12 +17,6 @@ const interTight = Inter_Tight({
 const inter = Inter({
   subsets: ['latin'],
   variable: '--font-inter',
-  display: 'swap',
-});
-
-const doto = Doto({
-  subsets: ['latin'],
-  variable: '--font-doto',
   display: 'swap',
 });
 
@@ -45,7 +39,7 @@ export default async function RootLayout({
   return (
     <html
       lang="en"
-      className={`${interTight.variable} ${inter.variable} ${doto.variable} h-dvh overflow-hidden`}
+      className={`${interTight.variable} ${inter.variable} h-dvh overflow-hidden`}
     >
       <head>
         <link rel="preload" as="image" href={APP_LOGO_SRC} />

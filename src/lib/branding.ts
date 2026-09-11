@@ -5,6 +5,9 @@ export const APP_NAME = 'Forager';
 /** Brand voice — field-ledger, careful notes */
 export const APP_TAGLINE = 'Turn leftover World Chain tokens into WLD.';
 
+/** Visible sign-in / splash line — no chain-name label. */
+export const APP_SIGNIN_TAGLINE = 'Turn leftover tokens into WLD.';
+
 export const APP_DESCRIPTION =
   'Forager finds leftover World Chain tokens that still have liquidity, then batches them into one swap back to WLD. You pick what to forage, preview the route and fee, and approve in World App.';
 

@@ -1,9 +1,9 @@
 'use client';
 
 import { ForageSplashSprite } from '@/components/ForageSplashSprite';
-import { TechScramble } from '@/components/ui/tech-scramble';
+import { ForagerPixelMark } from '@/components/ForagerPixelMark';
 import { cn } from '@/lib/utils';
-import { APP_NAME, APP_TAGLINE } from '@/lib/branding';
+import { APP_NAME, APP_SIGNIN_TAGLINE } from '@/lib/branding';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
 import { useRef } from 'react';
@@ -90,16 +90,12 @@ export function Preloader({
         <div className="forager-splash-mark">
           <ForageSplashSprite variant="hero" />
         </div>
+        <div className="forager-splash-green-blend" />
         <div className="forager-splash-copy">
-          <p className="forager-splash-kicker forager-support-fade">
-            World Chain
-          </p>
-          <TechScramble
-            text={APP_NAME}
-            className="forager-display forager-splash-title"
-          />
+          <ForagerPixelMark size={72} className="forager-pixel-mark-splash" />
+          <h1 className="forager-display forager-splash-title">{APP_NAME}</h1>
           <p className="forager-splash-tagline forager-support-fade">
-            {APP_TAGLINE}
+            {APP_SIGNIN_TAGLINE}
           </p>
         </div>
       </div>

@@ -1,5 +1,4 @@
 import { WldBalanceChip } from '@/components/WldBalanceChip';
-import { TechScramble } from '@/components/ui/tech-scramble';
 import { APP_NAME } from '@/lib/branding';
 import { Marble } from '@worldcoin/mini-apps-ui-kit-react';
 
@@ -21,10 +20,7 @@ export function AppHeader({
   return (
     <div className="flex items-center justify-between gap-3">
       <div className="min-w-0">
-        <TechScramble
-          text={title}
-          className="forager-display-lg truncate"
-        />
+        <h1 className="forager-display-lg">{title}</h1>
         {subtitle ? (
           <p className="forager-support-fade mt-2 text-[15px] leading-snug text-forager-text-muted">
             {subtitle}
