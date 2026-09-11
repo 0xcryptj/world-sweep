@@ -1693,11 +1693,6 @@ nextjs-portal,
   isolation: isolate;
 }
 
-.forager-signin-world {
-  flex-shrink: 0;
-  color: #fff;
-}
-
 .forager-forage-sprite {
   pointer-events: none;
 }

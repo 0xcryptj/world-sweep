@@ -83,11 +83,6 @@ export const AuthButton = () => {
           </span>
         </ForagerButton>
       </LiveFeedback>
-      {!isInstalled ? (
-        <p className="max-w-[16rem] text-center text-[13px] leading-snug text-forager-text-muted">
-          Open Forager inside World App to sign in.
-        </p>
-      ) : null}
     </div>
   );
 };
