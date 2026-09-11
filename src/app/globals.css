@@ -1656,6 +1656,40 @@ nextjs-portal,
   pointer-events: none;
 }
 
+.forager-enter-ascii {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0.22;
+  mix-blend-mode: screen;
+  -webkit-mask-image: radial-gradient(
+    ellipse 40% 36% at 50% 48%,
+    transparent 0%,
+    transparent 48%,
+    rgb(0 0 0 / 0.4) 70%,
+    #000 100%
+  );
+  mask-image: radial-gradient(
+    ellipse 40% 36% at 50% 48%,
+    transparent 0%,
+    transparent 48%,
+    rgb(0 0 0 / 0.4) 70%,
+    #000 100%
+  );
+}
+
+.forager-enter-ascii video {
+  width: 78%;
+  height: 78%;
+  max-width: 42rem;
+  object-fit: contain;
+  filter: grayscale(1) contrast(1.12) brightness(1.04);
+}
+
 .forager-splash-vignette {
   position: absolute;
   inset: 0;
@@ -2018,6 +2052,7 @@ nextjs-portal,
   .forager-jump-dots span,
   .forager-support-fade,
   .forager-splash-copy,
+  .forager-enter-ascii,
   .base-scramble-reel,
   .forager-cube,
   .forager-cube-sides,
@@ -2062,6 +2097,10 @@ nextjs-portal,
   .base-scramble-reel {
     animation: none;
     transform: translateY(var(--scramble-to));
+  }
+
+  .forager-enter-ascii {
+    display: none;
   }
 }
 
