@@ -1,8 +1,6 @@
 'use client';
 
-import { AppLogo } from '@/components/AppLogo';
-import { IosIcon } from '@/components/IosIcon';
-import { ProgressRing } from '@/components/ProgressRing';
+import { CubeLoader } from '@/components/CubeLoader';
 import { asymptoticPendingProgress } from '@/lib/pending-progress';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
@@ -21,7 +19,6 @@ type ForagerActivityProps = {
 export function ForagerActivity({
   title,
   messages,
-  icon = 'coin',
   className = '',
   durationMs = 12_000,
   variant = 'default',
@@ -113,15 +110,7 @@ export function ForagerActivity({
         className={`forager-activity-card ${isScan ? 'forager-activity-card-scan' : ''}`}
       >
         <div className="forager-activity-stage">
-          <ProgressRing progress={progress} size={isScan ? 104 : 84} strokeWidth={2.25}>
-            {isScan ? (
-              <AppLogo size="sm" variant="bare" />
-            ) : (
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1f1f1f] text-forager-accent">
-                <IosIcon name={icon} size={26} className="forager-activity-icon" />
-              </div>
-            )}
-          </ProgressRing>
+          <CubeLoader size={isScan ? 'md' : 'sm'} />
         </div>
 
         <div className="forager-activity-copy">
@@ -131,7 +120,7 @@ export function ForagerActivity({
 
           {isScan ? (
             <p className="forager-subtitle max-w-[26ch] px-1 text-[12px] leading-relaxed">
-              First-time scans can take about a minute
+              First-time scans usually take a few seconds
             </p>
           ) : null}
 

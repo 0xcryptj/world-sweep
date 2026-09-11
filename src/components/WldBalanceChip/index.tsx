@@ -1,10 +1,14 @@
 'use client';
 
 import { TokenIcon } from '@/components/Sweep/TokenIcon';
-import { apiPath } from '@/lib/base-path';
 import { hapticImpact, hapticSelection } from '@/lib/haptics';
 import { cn } from '@/lib/utils';
 import { useLocalFiat, wldAmountToFiat } from '@/lib/use-wld-price';
+import {
+  fetchWldBalanceClient,
+  isWldClientCacheFresh,
+  readWldClientCache,
+} from '@/lib/wld-client-cache';
 import {
   requestWalletRefresh,
   useWalletRefreshListener,
@@ -33,80 +37,45 @@ export function WldBalanceChip({ className = '' }: WldBalanceChipProps) {
     return fiat.format(wldAmountToFiat(balance, fiat.price));
   }, [balance, fiat]);
 
-  const loadBalance = useCallback(async () => {
-    if (!walletAddress) {
-      setLoading(false);
-      return;
-    }
+  const loadBalance = useCallback(
+    async (force = false) => {
+      if (!walletAddress) {
+        setLoading(false);
+        return;
+      }
 
-    try {
-      const cacheKey = `forager:wld:${walletAddress.toLowerCase()}`;
-      const raw = sessionStorage.getItem(cacheKey);
-      if (raw) {
-        const parsed = JSON.parse(raw) as { balance: string; at: number };
-        if (parsed.balance != null && Date.now() - parsed.at < 30_000) {
-          setBalance(parsed.balance);
-          setLoading(false);
+      const cached = readWldClientCache(walletAddress);
+      if (cached) {
+        setBalance(cached.balance);
+        setLoading(false);
+        if (!force && isWldClientCacheFresh(cached.ageMs)) {
           return;
         }
+      } else if (!force) {
+        setLoading(true);
       }
-    } catch {
-      /* sessionStorage unavailable */
-    }
 
-    setLoading(true);
-
-    try {
-      const response = await fetch(
-        apiPath(`/balance?address=${encodeURIComponent(walletAddress)}`),
-        { cache: 'no-store' },
-      );
-      const payload = (await response.json()) as {
-        wldBalance?: string;
-        error?: string;
-      };
-
-      if (response.ok) {
-        const next = payload.wldBalance ?? '0';
+      const next = await fetchWldBalanceClient(walletAddress, { force });
+      if (next != null) {
         setBalance(next);
-        try {
-          sessionStorage.setItem(
-            `forager:wld:${walletAddress.toLowerCase()}`,
-            JSON.stringify({ balance: next, at: Date.now() }),
-          );
-        } catch {
-          /* ignore */
-        }
       }
-    } catch {
-      // Keep the last known balance on transient failures — never block UI.
-    } finally {
       setLoading(false);
-    }
-  }, [walletAddress]);
+    },
+    [walletAddress],
+  );
 
   useEffect(() => {
-    void loadBalance();
+    void loadBalance(false);
   }, [loadBalance]);
 
   useWalletRefreshListener(
     (detail) => {
-      if (
-        !detail.force &&
-        detail.reason !== 'forage' &&
-        detail.reason !== 'manual' &&
-        detail.reason !== 'connect'
-      ) {
-        return;
-      }
-      try {
-        sessionStorage.removeItem(
-          `forager:wld:${walletAddress.toLowerCase()}`,
-        );
-      } catch {
-        /* ignore */
-      }
-      void loadBalance();
+      const force =
+        Boolean(detail.force) ||
+        detail.reason === 'forage' ||
+        detail.reason === 'manual' ||
+        detail.reason === 'connect';
+      void loadBalance(force);
     },
     { minIntervalMs: 2_500 },
   );
@@ -122,7 +91,7 @@ export function WldBalanceChip({ className = '' }: WldBalanceChipProps) {
         void hapticSelection();
         void hapticImpact('light');
         requestWalletRefresh({ reason: 'manual', force: true });
-        void loadBalance();
+        void loadBalance(true);
       }}
       className={cn('forager-balance-chip', className)}
       aria-label="Refresh WLD balance"

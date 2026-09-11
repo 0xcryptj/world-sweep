@@ -45,9 +45,40 @@ export function setCachedRoute(
   route: RouteQuote | null,
   ttlMs = DEFAULT_TTL_MS,
 ): void {
+  const existing = routeCache.get(key);
+  if (existing && Date.now() <= existing.expires && existing.route) {
+    // Never let a timeout miss or a worse retry replace a warm positive quote.
+    if (!route) {
+      return;
+    }
+    if (route.amountOut < existing.route.amountOut) {
+      return;
+    }
+  }
+
   routeCache.set(key, {
     route,
     expires: Date.now() + (route === null ? Math.min(ttlMs, NULL_ROUTE_TTL_MS) : ttlMs),
+  });
+}
+
+const inflightRoutes = new Map<string, Promise<RouteQuote | null>>();
+
+export function getInflightRoute(
+  key: string,
+): Promise<RouteQuote | null> | undefined {
+  return inflightRoutes.get(key);
+}
+
+export function setInflightRoute(
+  key: string,
+  promise: Promise<RouteQuote | null>,
+): void {
+  inflightRoutes.set(key, promise);
+  void promise.finally(() => {
+    if (inflightRoutes.get(key) === promise) {
+      inflightRoutes.delete(key);
+    }
   });
 }
 

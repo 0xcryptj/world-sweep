@@ -1,23 +1,19 @@
 'use client';
 
+import { CubeLoader } from '@/components/CubeLoader';
 import { ForagerButton } from '@/components/ForagerButton';
 import { SectionHeader } from '@/components/SectionHeader';
-import { TokenBadge } from '@/components/TokenBadge';
 import { ShineBorder } from '@/components/ui/shine-border';
-import { TokenIcon } from '@/components/Sweep/TokenIcon';
+import { TokenListRow } from '@/components/TokenListRow';
 import { apiPath } from '@/lib/base-path';
 import { FetchTimeoutError, fetchWithTimeout } from '@/lib/fetch-with-timeout';
-import { WLD_ADDRESS } from '@/lib/constants';
 import { hapticImpact, hapticNotification, hapticSelection } from '@/lib/haptics';
-import {
-  useLocalFiat,
-  wldAmountToFiat,
-  wldWeiToUsd,
-} from '@/lib/use-wld-price';
+import { useLocalFiat, wldAmountToFiat } from '@/lib/use-wld-price';
 import {
   requestWalletRefresh,
   useWalletRefreshListener,
 } from '@/lib/wallet-refresh';
+import { writeWldClientCache } from '@/lib/wld-client-cache';
 import type { WalletToken } from '@/lib/types';
 import { MiniKit } from '@worldcoin/minikit-js';
 import { useSession } from 'next-auth/react';
@@ -93,6 +89,7 @@ export function WalletPanel() {
 
         setData(payload);
         setLoadingBalance(false);
+        writeWldClientCache(walletAddress, payload.wldBalance);
       } catch (loadError) {
         const message =
           loadError instanceof FetchTimeoutError
@@ -186,8 +183,8 @@ export function WalletPanel() {
 
   if (loading && !data) {
     return (
-      <div className="forager-section">
-        <div className="forager-skeleton-block h-28 rounded-[10px]" />
+      <div className="flex flex-col items-center gap-4 py-8">
+        <CubeLoader />
         <p className="forager-subtitle text-[15px]">Loading wallet...</p>
       </div>
     );
@@ -285,7 +282,7 @@ export function WalletPanel() {
           }
         />
 
-        <div className="forager-group">
+        <div className="forager-group forager-wallet-list">
           {loading && data.tokens.length === 0 ? (
             <p className="px-4 py-4 text-[15px] text-forager-text-muted">
               Loading token list…
@@ -296,15 +293,12 @@ export function WalletPanel() {
             </p>
           ) : (
             data.tokens.map((token) => (
-              <TokenRow
+              <TokenListRow
                 key={token.address}
                 token={token}
-                forageable={forageableAddressSet.has(token.address.toLowerCase())}
-                pendingAllowlist={pendingAllowlistSet.has(
-                  token.address.toLowerCase(),
-                )}
-                fiatPrice={fiat.price}
-                formatFiat={fiat.format}
+                disabled
+                verified={pendingAllowlistSet.has(token.address.toLowerCase())}
+                verifiedTone="pending"
               />
             ))
           )}
@@ -339,74 +333,6 @@ export function WalletPanel() {
           No leftover tokens ready to forage right now.
         </p>
       ) : null}
-    </div>
-  );
-}
-
-function TokenRow({
-  token,
-  forageable,
-  pendingAllowlist,
-  fiatPrice,
-  formatFiat,
-}: {
-  token: WalletToken;
-  forageable: boolean;
-  pendingAllowlist: boolean;
-  fiatPrice: number | null;
-  formatFiat: (value: number) => string;
-}) {
-  const isWld = token.address.toLowerCase() === WLD_ADDRESS.toLowerCase();
-
-  const fiatHint = useMemo(() => {
-    if (fiatPrice === null) {
-      return null;
-    }
-    if (isWld) {
-      return formatFiat(wldAmountToFiat(token.balanceFormatted, fiatPrice));
-    }
-    if (token.cachedRoute?.amountOut) {
-      return formatFiat(wldWeiToUsd(token.cachedRoute.amountOut, fiatPrice));
-    }
-    return null;
-  }, [fiatPrice, formatFiat, isWld, token.balanceFormatted, token.cachedRoute]);
-
-  return (
-    <div
-      className="forager-group-row flex items-center gap-3 px-4 py-3.5"
-      onTouchStart={() => {
-        void hapticSelection();
-      }}
-    >
-      <TokenIcon
-        size="sm"
-        address={token.address}
-        symbol={token.symbol}
-        logoUrl={token.logoUrl}
-      />
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <p className="truncate text-[17px] font-semibold">{token.symbol}</p>
-          {isWld ? (
-            <TokenBadge label="Native" tone="native" />
-          ) : forageable ? (
-            <TokenBadge label="Verified" tone="verified" icon />
-          ) : pendingAllowlist ? (
-            <TokenBadge label="Verified" tone="pending" icon />
-          ) : (
-            <TokenBadge label="No route" tone="muted" />
-          )}
-        </div>
-        <p className="truncate text-[13px] text-forager-text-muted">{token.name}</p>
-      </div>
-      <div className="shrink-0 text-right">
-        <p className="forager-numeric text-[17px]">{token.balanceFormatted}</p>
-        {fiatHint ? (
-          <p className="forager-numeric text-[13px] text-forager-text-muted">
-            ≈ {fiatHint}
-          </p>
-        ) : null}
-      </div>
     </div>
   );
 }

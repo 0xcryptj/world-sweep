@@ -1,9 +1,9 @@
 'use client';
 
-import { TokenBadge } from '@/components/TokenBadge';
+import { TokenListRow } from '@/components/TokenListRow';
 import { AnimatedWld } from '@/components/Sweep/AnimatedWld';
 import { ErrorBanner } from '@/components/Sweep/ErrorBanner';
-import { TokenIcon } from '@/components/Sweep/TokenIcon';
+import { JumpingDots } from '@/components/ui/jumping-dots';
 import { ForagerActivity, TokenListSkeleton } from '@/components/ForagerActivity';
 import { CleanWalletArt } from '@/components/CleanWalletArt';
 import { IosIcon } from '@/components/IosIcon';
@@ -31,10 +31,9 @@ import {
   writeClientScanCache,
 } from '@/lib/client-scan-cache';
 import { formatUsd, useWldPrice, wldWeiToUsd } from '@/lib/use-wld-price';
-import { formatWld } from '@/lib/sweep';
 import { isForageableToken } from '@/lib/token-filters';
 import type { ScanExclusionReason } from '@/lib/forage-scan';
-import type { BuildSweepResponse, SweepQuote, WalletToken } from '@/lib/types';
+import type { BuildSweepResponse, WalletToken } from '@/lib/types';
 import { requestWalletRefresh } from '@/lib/wallet-refresh';
 import { LiveFeedback } from '@worldcoin/mini-apps-ui-kit-react';
 import { MiniKit } from '@worldcoin/minikit-js';
@@ -56,6 +55,8 @@ type ExcludedToken = {
   name: string;
   balanceFormatted: string;
   logoUrl?: string | null;
+  priceUsd?: number | null;
+  priceChange24h?: number | null;
   reason: ScanExclusionReason;
   reasonLabel: string;
 };
@@ -200,6 +201,7 @@ export function Sweep() {
   const lastRecordedPlanRef = useRef<BuildSweepResponse | null>(null);
   const previewRequestRef = useRef(0);
   const lastPreviewedKeyRef = useRef('');
+  const previewRetryRef = useRef<Record<string, number>>({});
   const [isQuoting, setIsQuoting] = useState(false);
   const [hasScanned, setHasScanned] = useState(false);
   const [scanUiComplete, setScanUiComplete] = useState(false);
@@ -331,14 +333,6 @@ export function Sweep() {
     walletAddress,
   ]);
 
-  const quotesByAddress = useMemo(() => {
-    const map = new Map<string, SweepQuote>();
-    for (const quote of plan?.quotes ?? []) {
-      map.set(quote.tokenAddress.toLowerCase(), quote);
-    }
-    return map;
-  }, [plan]);
-
   const loadTokens = useCallback(async (forceRefresh = false) => {
     if (!walletAddress) {
       return;
@@ -445,7 +439,7 @@ export function Sweep() {
       const response = await fetchWithTimeout(
         apiPath(`/tokens?${query.toString()}`),
         {},
-        mode === 'fast' ? 18_000 : 55_000,
+        mode === 'fast' ? 12_000 : 55_000,
       );
       const payload = (await response.json()) as {
         tokens?: WalletToken[];
@@ -600,6 +594,7 @@ export function Sweep() {
 
       const requestId = ++previewRequestRef.current;
       setIsQuoting(true);
+      let keepQuoting = false;
 
       try {
         const nextPlan = await buildPlan(forageBatch);
@@ -607,8 +602,27 @@ export function Sweep() {
           return;
         }
 
-        lastPreviewedKeyRef.current = previewKey;
-        setPlan(nextPlan.quotes.length > 0 ? nextPlan : null);
+        if (nextPlan.quotes.length > 0) {
+          lastPreviewedKeyRef.current = previewKey;
+          previewRetryRef.current[previewKey] = 0;
+          setPlan(nextPlan);
+        } else {
+          const retries = previewRetryRef.current[previewKey] ?? 0;
+          const transportSkip = nextPlan.skippedTokens.some((token) =>
+            /busy|retry|RPC|right now|timed out/i.test(token.reason),
+          );
+          if (retries < 2 && transportSkip) {
+            keepQuoting = true;
+            previewRetryRef.current[previewKey] = retries + 1;
+            lastPreviewedKeyRef.current = '';
+            window.setTimeout(() => {
+              void runAutoPreview(previewKey);
+            }, 800 * (retries + 1));
+          } else {
+            lastPreviewedKeyRef.current = previewKey;
+            setPlan((current) => (current ? current : null));
+          }
+        }
 
         const notice = buildSkipNotice(
           nextPlan.skippedTokens,
@@ -616,7 +630,7 @@ export function Sweep() {
         );
         if (notice) {
           setSkipNotice(notice);
-        } else {
+        } else if (nextPlan.quotes.length > 0) {
           setSkipNotice(null);
         }
         // Keep the user's selection intact while preview builds / skips.
@@ -627,9 +641,6 @@ export function Sweep() {
           return;
         }
 
-        // Leave lastPreviewedKey unset on failure so a later selection toggle
-        // or rescan can retry; avoid immediate re-loop by marking this key
-        // only after a short cool-down via the ref set below.
         const message =
           buildError instanceof FetchTimeoutError
             ? buildError.message
@@ -637,10 +648,17 @@ export function Sweep() {
               ? buildError.message
               : 'Failed to build sweep';
 
-        setPlan(null);
-        // Soft quote flakes: keep selection so the user can retry without
-        // re-ticking every forageable token.
-        if (!isSoftQuoteFailure(message) && !/timed out/i.test(message)) {
+        const retries = previewRetryRef.current[previewKey] ?? 0;
+        const soft = isSoftQuoteFailure(message) || /timed out/i.test(message);
+
+        if (soft && retries < 2) {
+          keepQuoting = true;
+          previewRetryRef.current[previewKey] = retries + 1;
+          lastPreviewedKeyRef.current = '';
+          window.setTimeout(() => {
+            void runAutoPreview(previewKey);
+          }, 800 * (retries + 1));
+        } else if (!soft) {
           const formatted = formatApiError(message);
           setError(formatted);
           setFailureLabel(shortErrorLabel(formatted));
@@ -652,11 +670,10 @@ export function Sweep() {
               'Could not quote this selection right now. Your picks are still selected — wait a moment or tap Rescan.',
             allowlistPending: false,
           });
-          // Allow a natural retry if the selection changes; otherwise Rescan.
           lastPreviewedKeyRef.current = previewKey;
         }
       } finally {
-        if (requestId === previewRequestRef.current) {
+        if (requestId === previewRequestRef.current && !keepQuoting) {
           setIsQuoting(false);
         }
       }
@@ -1108,7 +1125,7 @@ export function Sweep() {
           ) : null}
 
           <div className="forager-scroll h-full space-y-8 pb-4">
-          <div className="forager-group">
+          <div className="forager-group forager-wallet-list">
             {isScanning || (!hasScanned && Boolean(walletAddress)) ? (
               <TokenListSkeleton rows={5} />
             ) : tokens.length === 0 ? (
@@ -1135,64 +1152,30 @@ export function Sweep() {
               </div>
             ) : (
               tokens.map((token, index) => {
-                const quote = quotesByAddress.get(token.address.toLowerCase());
                 const isSelected = Boolean(selected[token.address]);
                 return (
-                  <label
+                  <TokenListRow
                     key={token.address}
-                    className={`forager-group-row forager-token-row forager-row-enter flex min-w-0 items-center gap-3 px-4 py-3.5 ${
-                      isSelected ? 'forager-token-row-selected' : ''
-                    }`}
+                    token={token}
+                    selected={isSelected}
+                    disabled={isSubmitting}
+                    className="forager-row-enter"
+                    onToggle={
+                      isSubmitting
+                        ? undefined
+                        : () => {
+                            void hapticSelection();
+                            lastPreviewedKeyRef.current = '';
+                            previewRetryRef.current = {};
+                            setPlan(null);
+                            setSelected((current) => ({
+                              ...current,
+                              [token.address]: !current[token.address],
+                            }));
+                          }
+                    }
                     style={{ '--row-delay': `${Math.min(index, 8) * 45}ms` } as React.CSSProperties}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      disabled={isSubmitting}
-                      className="shrink-0 disabled:opacity-50"
-                      onChange={(event) => {
-                        void hapticSelection();
-                        lastPreviewedKeyRef.current = '';
-                        setPlan(null);
-                        setSelected((current) => ({
-                          ...current,
-                          [token.address]: event.target.checked,
-                        }));
-                      }}
-                    />
-                    <TokenIcon
-                      size="sm"
-                      address={token.address}
-                      symbol={token.symbol}
-                      logoUrl={token.logoUrl}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <p className="forager-title truncate text-[17px] leading-tight">
-                          {token.symbol}
-                        </p>
-                        <TokenBadge label="Verified" tone="verified" icon />
-                      </div>
-                      <p className="truncate text-[13px] leading-tight text-forager-text-muted">
-                        {token.name}
-                      </p>
-                    </div>
-                    <div className="shrink-0 text-right">
-                      <p className="forager-numeric text-[17px] leading-tight text-foreground">
-                        {token.balanceFormatted}
-                      </p>
-                      {quote ? (
-                        <p className="forager-value-green forager-value-pop text-[13px] leading-tight">
-                          ≈ {formatWld(quote.estimatedWldOut)}
-                          {wldUsd !== null ? (
-                            <span className="text-forager-text-muted">
-                              {' '}· {formatUsd(wldWeiToUsd(quote.estimatedWldOut, wldUsd))}
-                            </span>
-                          ) : null}
-                        </p>
-                      ) : null}
-                    </div>
-                  </label>
+                  />
                 );
               })
             )}
@@ -1208,33 +1191,15 @@ export function Sweep() {
                   Verified · World App syncing
                 </span>
               </div>
-              <div className="forager-group">
+              <div className="forager-group forager-wallet-list">
                 {pendingVerifiedTokens.map((token) => (
-                  <div
+                  <TokenListRow
                     key={token.address}
-                    className="forager-group-row forager-row-enter flex min-w-0 items-center gap-3 px-4 py-3.5"
-                  >
-                    <TokenIcon
-                      size="sm"
-                      address={token.address}
-                      symbol={token.symbol}
-                      logoUrl={token.logoUrl}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <p className="forager-title truncate text-[17px] leading-tight">
-                          {token.symbol}
-                        </p>
-                        <TokenBadge label="Verified" tone="pending" icon />
-                      </div>
-                      <p className="truncate text-[13px] leading-tight text-forager-text-muted">
-                        Reopen World App to forage
-                      </p>
-                    </div>
-                    <p className="forager-numeric shrink-0 text-[15px] text-forager-text-muted">
-                      {token.balanceFormatted}
-                    </p>
-                  </div>
+                    token={token}
+                    disabled
+                    verified
+                    verifiedTone="pending"
+                  />
                 ))}
               </div>
             </div>
@@ -1269,42 +1234,39 @@ export function Sweep() {
                 </span>
               </button>
               {showExcluded ? (
-                <div className="forager-group">
+                <div className="forager-group forager-wallet-list">
                   {nonForagableTokens.map((token) => (
-                    <div
+                    <TokenListRow
                       key={token.address}
-                      className="forager-group-row forager-row-enter flex min-w-0 items-center gap-3 px-4 py-3.5 opacity-70"
-                    >
-                      <TokenIcon
-                        size="sm"
-                        address={token.address}
-                        symbol={token.symbol}
-                        logoUrl={token.logoUrl}
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="forager-title truncate text-[17px] leading-tight">
-                          {token.symbol}
-                        </p>
-                        <p className="truncate text-[13px] leading-tight text-forager-text-muted">
-                          {token.reasonLabel}
-                        </p>
-                      </div>
-                      <p className="forager-numeric shrink-0 text-[15px] text-forager-text-muted">
-                        {token.balanceFormatted}
-                      </p>
-                    </div>
+                      token={token}
+                      disabled
+                      className="opacity-70"
+                    />
                   ))}
                 </div>
               ) : null}
             </div>
           ) : null}
 
-          {plan && (
+          {(isQuoting || plan) && forageBatch.length > 0 ? (
             <div className="forager-preview forager-row-enter">
               <div className="flex items-center gap-2">
                 <IosIcon name="swap" size={18} />
                 <p className="forager-title text-[17px]">Preview</p>
+                {isQuoting ? <JumpingDots label="Quoting preview" /> : null}
               </div>
+              {isQuoting ? (
+                <div className="mt-4 flex flex-wrap items-baseline gap-x-2">
+                  <span className="text-[13px] text-forager-text-muted">
+                    You receive
+                  </span>
+                  <JumpingDots
+                    label="Estimating WLD"
+                    className="forager-numeric text-[22px]"
+                  />
+                </div>
+              ) : plan ? (
+                <>
               <p className="mt-3 text-[15px] leading-snug text-forager-text-muted">
                 Swapping {plan.quotes.length} leftover token
                 {plan.quotes.length === 1 ? '' : 's'}
@@ -1347,8 +1309,10 @@ export function Sweep() {
                   })()}
                 </p>
               ) : null}
+                </>
+              ) : null}
             </div>
-          )}
+          ) : null}
           </div>
         </div>
       </div>
@@ -1397,7 +1361,7 @@ export function Sweep() {
               success: BRAND_COPY.forageSuccess,
             }}
             state={buttonState}
-            className="w-full"
+            className="forager-cta-wrap w-full"
           >
             <ForagerButton
               onClick={() => void onSweep()}

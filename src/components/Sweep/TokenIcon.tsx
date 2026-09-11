@@ -1,5 +1,6 @@
 'use client';
 
+import { WorldChainBadge } from '@/components/Sweep/WorldChainBadge';
 import {
   getTokenIconSources,
   tokenIconHue,
@@ -11,6 +12,7 @@ import { useEffect, useMemo, useState } from 'react';
 type TokenIconProps = Pick<WalletToken, 'address' | 'symbol' | 'logoUrl'> & {
   className?: string;
   size?: 'xs' | 'sm' | 'md';
+  badge?: boolean;
 };
 
 const sizeMap = {
@@ -25,6 +27,7 @@ export function TokenIcon({
   logoUrl,
   className = '',
   size = 'md',
+  badge = false,
 }: TokenIconProps) {
   const dimension = sizeMap[size];
   const sources = useMemo(
@@ -45,7 +48,7 @@ export function TokenIcon({
   const dimensionClass =
     size === 'xs' ? 'h-6 w-6' : size === 'sm' ? 'h-8 w-8' : 'h-10 w-10';
   const frameClass = cn(
-    'relative shrink-0 overflow-hidden rounded-xl border border-forager-border/60 shadow-[0_0_0_1px_rgba(0,0,0,0.2)]',
+    'relative shrink-0 overflow-hidden rounded-full bg-[#141414]',
     className,
   );
   const currentSource = exhausted ? null : sources[sourceIndex];
@@ -68,23 +71,19 @@ export function TokenIcon({
     });
   };
 
-  if (!currentSource) {
-    return (
-      <div
-        className={`${dimensionClass} ${frameClass} flex items-center justify-center`}
-        style={{
-          background: `radial-gradient(circle at 28% 25%, hsl(${hue} 55% 45%), hsl(${hue} 38% 20%) 68%)`,
-        }}
-        aria-label={`${safeSymbol} icon`}
-      >
-        <span className="text-[10px] font-semibold tracking-[0.08em] text-white/95">
-          {initials}
-        </span>
-      </div>
-    );
-  }
-
-  return (
+  const icon = !currentSource ? (
+    <div
+      className={`${dimensionClass} ${frameClass} flex items-center justify-center`}
+      style={{
+        background: `radial-gradient(circle at 28% 25%, hsl(${hue} 55% 45%), hsl(${hue} 38% 20%) 68%)`,
+      }}
+      aria-label={`${safeSymbol} icon`}
+    >
+      <span className="text-[10px] font-semibold tracking-[0.08em] text-white/95">
+        {initials}
+      </span>
+    </div>
+  ) : (
     <div
       className={`${dimensionClass} ${frameClass} bg-forager-surface`}
       aria-label={`${symbol} icon`}
@@ -129,5 +128,16 @@ export function TokenIcon({
 
       <span className="sr-only">{safeSymbol}</span>
     </div>
+  );
+
+  if (!badge) {
+    return icon;
+  }
+
+  return (
+    <span className="relative inline-flex shrink-0">
+      {icon}
+      <WorldChainBadge />
+    </span>
   );
 }

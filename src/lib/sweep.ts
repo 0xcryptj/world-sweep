@@ -1,3 +1,4 @@
+import { mapPool } from './async-pool';
 import { formatUnitsCapped } from './format-balance';
 import {
   decodeFunctionData,
@@ -288,80 +289,101 @@ export async function buildSweepPlan({
   /** Sum of per-token quoted amountOut — the fee base (5% of full quotes). */
   let quotedWldTotal = BigInt(0);
 
-  for (const token of candidates) {
+  type PreparedCandidate = {
+    token: WalletToken;
+    amountIn: bigint;
+    route: RouteQuote;
+    minWldOut: bigint;
+  };
+
+  const prepared = await mapPool(
+    candidates.slice(0, MAX_TOKENS_PER_SWEEP + 4),
+    4,
+    async (token): Promise<PreparedCandidate | { skip: BuildSweepResponse['skippedTokens'][number] } | null> => {
+      if (!isAddress(token.address) || !/^\d+$/.test(String(token.balance))) {
+        return {
+          skip: {
+            address: String(token.address),
+            symbol: String(token.symbol ?? 'UNKNOWN'),
+            reason: 'Invalid token address or balance',
+          },
+        };
+      }
+
+      if (!isPermit2Allowlisted(token.address)) {
+        return {
+          skip: {
+            address: token.address,
+            symbol: token.symbol,
+            reason: ALLOWLIST_PENDING_SKIP_REASON,
+          },
+        };
+      }
+
+      const amountIn = BigInt(token.balance);
+      if (amountIn <= BigInt(0)) {
+        return null;
+      }
+
+      let route: RouteQuote | null = null;
+      try {
+        route = await resolveRoute(token);
+      } catch (error) {
+        return {
+          skip: {
+            address: token.address,
+            symbol: token.symbol,
+            reason:
+              error instanceof QuoteTransportError
+                ? 'Quote RPC busy — retry in a moment'
+                : 'Could not quote a WLD route right now',
+          },
+        };
+      }
+
+      if (!route) {
+        return {
+          skip: {
+            address: token.address,
+            symbol: token.symbol,
+            reason: 'No Uniswap V3 liquidity route to WLD',
+          },
+        };
+      }
+
+      const minWldOut = applySlippage(route.amountOut, SLIPPAGE_BPS);
+      if (minWldOut < MIN_WLD_OUT_WEI) {
+        return {
+          skip: {
+            address: token.address,
+            symbol: token.symbol,
+            reason: 'Quoted output too small after slippage',
+          },
+        };
+      }
+
+      return { token, amountIn, route, minWldOut };
+    },
+  );
+
+  for (const item of prepared) {
+    if (!item) {
+      continue;
+    }
+    if ('skip' in item) {
+      skippedTokens.push(item.skip);
+    }
+  }
+
+  for (const item of prepared) {
+    if (!item || 'skip' in item) {
+      continue;
+    }
     if (quotes.length >= MAX_TOKENS_PER_SWEEP) {
       break;
     }
 
-    // Reject structurally invalid client input before it reaches address /
-    // BigInt parsing (which would otherwise throw and 500 the whole batch).
-    if (!isAddress(token.address) || !/^\d+$/.test(String(token.balance))) {
-      skippedTokens.push({
-        address: String(token.address),
-        symbol: String(token.symbol ?? 'UNKNOWN'),
-        reason: 'Invalid token address or balance',
-      });
-      continue;
-    }
-
-    // Every Worldchain token is foragable-by-default; the transferability +
-    // approval simulations below (and the explicit MALICIOUS_TOKEN_ADDRESSES
-    // blocklist inside isForageableToken) are the real gate. Tokens not yet on
-    // the Developer Portal allowlist are soft-skipped so World App never
-    // hard-blocks the whole batch with invalid_contract.
-
-    if (!isPermit2Allowlisted(token.address)) {
-      skippedTokens.push({
-        address: token.address,
-        symbol: token.symbol,
-        reason: ALLOWLIST_PENDING_SKIP_REASON,
-      });
-      continue;
-    }
-
-    const amountIn = BigInt(token.balance);
-    if (amountIn <= BigInt(0)) {
-      continue;
-    }
-
-    // Do NOT hard-skip on wallet→router `transfer` eth_call — many liquid
-    // World Chain bags false-positive here while approve+transferFrom works.
-    // Approval simulation below is the real sellability gate.
-
-    let route: RouteQuote | null = null;
-    try {
-      route = await resolveRoute(token);
-    } catch (error) {
-      skippedTokens.push({
-        address: token.address,
-        symbol: token.symbol,
-        reason:
-          error instanceof QuoteTransportError
-            ? 'Quote RPC busy — retry in a moment'
-            : 'Could not quote a WLD route right now',
-      });
-      continue;
-    }
-
-    if (!route) {
-      skippedTokens.push({
-        address: token.address,
-        symbol: token.symbol,
-        reason: 'No Uniswap V3 liquidity route to WLD',
-      });
-      continue;
-    }
-
-    const minWldOut = applySlippage(route.amountOut, SLIPPAGE_BPS);
-
-    if (minWldOut < MIN_WLD_OUT_WEI) {
-      skippedTokens.push({
-        address: token.address,
-        symbol: token.symbol,
-        reason: 'Quoted output too small after slippage',
-      });
-      continue;
-    }
+    const { token, amountIn, route, minWldOut } = item;
 
     estimatedWldTotal += minWldOut;
     quotedWldTotal += route.amountOut;

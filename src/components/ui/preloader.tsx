@@ -1,8 +1,7 @@
 'use client';
 
 import { ForageSplashSprite } from '@/components/ForageSplashSprite';
-import { AnimatedShinyText } from '@/components/ui/animated-shiny-text';
-import { SparklesText } from '@/components/ui/sparkles-text';
+import { TechScramble } from '@/components/ui/tech-scramble';
 import { cn } from '@/lib/utils';
 import { APP_NAME, APP_TAGLINE } from '@/lib/branding';
 import { useGSAP } from '@gsap/react';
@@ -86,21 +85,22 @@ export function Preloader({
       className={cn('forager-preloader', className)}
     >
       <div className="forager-splash-wash" />
+      <div className="forager-splash-vignette" />
       <div ref={stageRef} className="forager-splash-stage">
         <div className="forager-splash-mark">
           <ForageSplashSprite variant="hero" />
         </div>
         <div className="forager-splash-copy">
-          <AnimatedShinyText className="forager-splash-kicker text-white/55">
+          <p className="forager-splash-kicker forager-support-fade">
             World Chain
-          </AnimatedShinyText>
-          <SparklesText
-            sparklesCount={4}
+          </p>
+          <TechScramble
+            text={APP_NAME}
             className="forager-display forager-splash-title"
-          >
-            {APP_NAME}
-          </SparklesText>
-          <p className="forager-splash-tagline">{APP_TAGLINE}</p>
+          />
+          <p className="forager-splash-tagline forager-support-fade">
+            {APP_TAGLINE}
+          </p>
         </div>
       </div>
     </div>

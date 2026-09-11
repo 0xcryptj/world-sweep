@@ -1,18 +1,17 @@
 import {
   bustWalletDataCaches,
   loadAllowlistOverlayCached,
-  loadForageScanCached,
   loadWalletHoldingsCached,
   loadWldBalanceCached,
+  peekForageScanCache,
 } from '@/lib/wallet-data';
 import { WLD_ADDRESS } from '@/lib/constants';
-import { getCachedWalletScan } from '@/lib/quote-cache';
 import { sanitizeErrorMessage } from '@/lib/safe-error';
 import { clientKeyFromRequest, rateLimit } from '@/lib/rate-limit';
 import type { WalletToken } from '@/lib/types';
 import { NextResponse } from 'next/server';
 
-export const maxDuration = 60;
+export const maxDuration = 30;
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
@@ -49,43 +48,27 @@ export async function GET(request: Request) {
       bustWalletDataCaches(address);
     }
 
-    await loadAllowlistOverlayCached();
-
-    // Holdings first so WLD can be derived from the same Token API response.
-    const holdingsResult = await loadWalletHoldingsCached(address, {
-      force: refresh,
-      maxEnrich: 48,
-    });
-    // Never force a second Alchemy balances call — holdings just seeded WLD.
+    // Holdings + overlay in parallel. Do NOT wait on a forage scan —
+    // Sweep owns fast/full quoting; this route only paints balances.
+    const [holdingsResult] = await Promise.all([
+      loadWalletHoldingsCached(address, {
+        force: refresh,
+        maxEnrich: 24,
+      }),
+      loadAllowlistOverlayCached(),
+    ]);
     const wldResult = await loadWldBalanceCached(address);
 
-    const cachedScan = refresh ? undefined : getCachedWalletScan(address);
-    let forageableByAddress: Map<string, WalletToken>;
-    let pendingAllowlistAddresses: string[] = [];
-    let scanFromCache = Boolean(cachedScan);
-
-    if (cachedScan) {
-      forageableByAddress = new Map(
-        cachedScan.tokens.map((token) => [
-          token.address.toLowerCase(),
-          token,
-        ]),
-      );
-      pendingAllowlistAddresses = cachedScan.excluded
-        .filter((token) => token.reason === 'allowlist_pending')
-        .map((token) => token.address.toLowerCase());
-    } else {
-      // Holdings already warmed above — do not force-bust again or we pay
-      // Alchemy twice on Rescan. Scan cache was cleared when refresh=1.
-      const scan = await loadForageScanCached(address, { force: false });
-      forageableByAddress = new Map(
-        scan.tokens.map((token) => [token.address.toLowerCase(), token]),
-      );
-      pendingAllowlistAddresses = scan.excluded
-        .filter((token) => token.reason === 'allowlist_pending')
-        .map((token) => token.address.toLowerCase());
-      scanFromCache = scan.fromCache;
-    }
+    const cachedScan = peekForageScanCache(address);
+    const forageableByAddress = new Map<string, WalletToken>(
+      (cachedScan?.tokens ?? []).map((token) => [
+        token.address.toLowerCase(),
+        token,
+      ]),
+    );
+    const pendingAllowlistAddresses = (cachedScan?.excluded ?? [])
+      .filter((token) => token.reason === 'allowlist_pending')
+      .map((token) => token.address.toLowerCase());
 
     const tokens = holdingsResult.holdings.map((token) => {
       const matched = forageableByAddress.get(token.address.toLowerCase());
@@ -103,7 +86,7 @@ export async function GET(request: Request) {
     const cacheParts = [
       wldResult.fromCache ? 'wld' : null,
       holdingsResult.fromCache ? 'holdings' : null,
-      scanFromCache ? 'scan' : null,
+      cachedScan ? 'scan' : null,
     ].filter(Boolean);
 
     return NextResponse.json(

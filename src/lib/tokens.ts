@@ -243,6 +243,9 @@ type MarketTokenMeta = {
   symbol?: string;
   name?: string;
   logoUrl?: string | null;
+  priceUsd?: number | null;
+  priceChange24h?: number | null;
+  liquidityUsd?: number;
 };
 
 /** Prefer a real ticker over Alchemy's empty / UNKNOWN placeholders. */
@@ -292,6 +295,8 @@ async function fetchDexScreenerTokenMetaBatch(
         baseToken?: { address?: string; name?: string; symbol?: string };
         info?: { imageUrl?: string };
         liquidity?: { usd?: number };
+        priceUsd?: string | number;
+        priceChange?: { h24?: number };
       }>;
 
       for (const pair of pairs ?? []) {
@@ -299,16 +304,29 @@ async function fetchDexScreenerTokenMetaBatch(
         if (!addr || !chunk.includes(addr)) {
           continue;
         }
+        const parsedPrice =
+          typeof pair.priceUsd === 'number'
+            ? pair.priceUsd
+            : typeof pair.priceUsd === 'string'
+              ? Number(pair.priceUsd)
+              : NaN;
         const next: MarketTokenMeta = {
           symbol: pair.baseToken?.symbol?.trim() || undefined,
           name: pair.baseToken?.name?.trim() || undefined,
           logoUrl: pair.info?.imageUrl?.trim() || null,
+          priceUsd: Number.isFinite(parsedPrice) && parsedPrice > 0 ? parsedPrice : null,
+          priceChange24h:
+            typeof pair.priceChange?.h24 === 'number' &&
+            Number.isFinite(pair.priceChange.h24)
+              ? pair.priceChange.h24
+              : null,
+          liquidityUsd:
+            typeof pair.liquidity?.usd === 'number' ? pair.liquidity.usd : 0,
         };
         const existing = result.get(addr);
         if (
           !existing ||
-          (!existing.logoUrl && next.logoUrl) ||
-          (!existing.symbol && next.symbol)
+          (next.liquidityUsd ?? 0) > (existing.liquidityUsd ?? 0)
         ) {
           result.set(addr, { ...existing, ...next });
         }
@@ -493,6 +511,20 @@ export async function fetchAllWalletTokens(
   return sortWalletHoldings([...enriched, ...remainder]);
 }
 
+function applyMarketQuote(
+  token: WalletToken,
+  market?: MarketTokenMeta,
+): WalletToken {
+  if (!market) {
+    return token;
+  }
+  return {
+    ...token,
+    priceUsd: market.priceUsd ?? token.priceUsd ?? null,
+    priceChange24h: market.priceChange24h ?? token.priceChange24h ?? null,
+  };
+}
+
 export async function enrichTokenMetadata(
   tokens: WalletToken[],
 ): Promise<WalletToken[]> {
@@ -501,27 +533,20 @@ export async function enrichTokenMetadata(
   }
 
   const needsWork = tokens.filter(tokenNeedsMetadataEnrich);
-  if (needsWork.length === 0) {
-    return tokens;
-  }
 
   // Prefer one DexScreener batch + one multicall over per-token Alchemy storms.
   const needOnChain = needsWork.filter(
     (token) =>
       isPlaceholderSymbol(token.symbol) || isPlaceholderName(token.name),
   );
-  const needMarket = needsWork.filter(
-    (token) =>
-      isPlaceholderSymbol(token.symbol) ||
-      isPlaceholderName(token.name) ||
-      !token.logoUrl,
-  );
 
   const [onChainMap, marketMap] = await Promise.all([
     readOnChainMetadataBatch(
       needOnChain.map((token) => getAddress(token.address) as Address),
     ),
-    fetchDexScreenerTokenMetaBatch(needMarket.map((token) => token.address)),
+    // Always pull DexScreener prices for the displayed set, not just
+    // tokens that still need a ticker/logo.
+    fetchDexScreenerTokenMetaBatch(tokens.map((token) => token.address)),
   ]);
 
   // Alchemy only for tokens still incomplete after on-chain + Dex batch.
@@ -552,14 +577,15 @@ export async function enrichTokenMetadata(
   });
 
   return tokens.map((token) => {
+    const key = token.address.toLowerCase();
+    const market = marketMap.get(key);
+
     if (!tokenNeedsMetadataEnrich(token)) {
-      return token;
+      return applyMarketQuote(token, market);
     }
 
-    const key = token.address.toLowerCase();
     const alchemy = alchemyByAddress.get(key);
     const onChain = onChainMap.get(key);
-    const market = marketMap.get(key);
 
     const symbol =
       (!isPlaceholderSymbol(alchemy?.symbol) ? alchemy?.symbol?.trim() : null) ||
@@ -583,14 +609,17 @@ export async function enrichTokenMetadata(
       token.logoUrl ||
       null;
 
-    return {
-      ...token,
-      symbol,
-      name,
-      decimals,
-      logoUrl,
-      balanceFormatted: formatUnitsCapped(BigInt(token.balance), decimals),
-    };
+    return applyMarketQuote(
+      {
+        ...token,
+        symbol,
+        name,
+        decimals,
+        logoUrl,
+        balanceFormatted: formatUnitsCapped(BigInt(token.balance), decimals),
+      },
+      market,
+    );
   });
 }
 

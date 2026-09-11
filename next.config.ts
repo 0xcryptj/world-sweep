@@ -27,6 +27,7 @@ const nextConfig: NextConfig = {
   },
   allowedDevOrigins,
   reactStrictMode: false,
+  devIndicators: false,
   async headers() {
     // Intentionally conservative: no CSP / X-Frame-Options / frame-ancestors so
     // the World App webview and MiniKit are not broken. These headers are safe
@@ -42,6 +43,7 @@ const nextConfig: NextConfig = {
             key: 'Permissions-Policy',
             value: 'browsing-topics=(), interest-cohort=()',
           },
+          { key: 'x-vercel-skip-toolbar', value: '1' },
         ],
       },
     ];

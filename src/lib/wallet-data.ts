@@ -44,13 +44,14 @@ const ALLOWLIST_STALE_MS = 5 * 60_000;
 const WLD_FRESH_MS = 15_000;
 const WLD_STALE_MS = 60_000;
 
-const HOLDINGS_TIMEOUT_MS = 14_000;
+const HOLDINGS_TIMEOUT_MS = 10_000;
+const WLD_TIMEOUT_MS = 4_000;
 const SCAN_TIMEOUT_MS = {
-  fast: 12_000,
+  fast: 8_000,
   full: 38_000,
 } as const;
 const SCAN_BUDGET_MS = {
-  fast: 9_000,
+  fast: 6_000,
   full: 32_000,
 } as const;
 
@@ -62,6 +63,11 @@ const SCAN_EMPTY_TTL_MS = {
   fast: 15_000,
   full: 30_000,
 } as const;
+
+const scanInflight = new Map<
+  string,
+  Promise<ForageScanPayload & { fromCache: boolean; holdingsStale: boolean }>
+>();
 
 export type ForageScanPayload = {
   tokens: WalletToken[];
@@ -115,6 +121,24 @@ function seedWldCacheFromHoldings(
     return;
   }
   cacheSet(WLD_NS, walletAddress, derived, WLD_FRESH_MS, WLD_STALE_MS);
+}
+
+/** Labels for /wallet without waiting on a fresh forage scan. */
+export function peekForageScanCache(
+  walletAddress: string,
+): ForageScanPayload | undefined {
+  const cached =
+    getCachedWalletScan(scanCacheKey(walletAddress, 'full')) ??
+    getCachedWalletScan(scanCacheKey(walletAddress, 'fast')) ??
+    getCachedWalletScan(walletAddress);
+  if (!cached) {
+    return undefined;
+  }
+  return {
+    tokens: cached.tokens,
+    excluded: cached.excluded,
+    mode: cached.mode === 'fast' || cached.mode === 'full' ? cached.mode : 'full',
+  };
 }
 
 export function bustWalletDataCaches(walletAddress: string): void {
@@ -171,15 +195,21 @@ export async function loadWldBalanceCached(
   walletAddress: string,
   options?: { force?: boolean },
 ) {
+  const fallbackZero: WldBalanceValue = {
+    balance: BigInt(0),
+    balanceFormatted: '0',
+    symbol: 'WLD',
+  };
+
   if (!options?.force) {
-    // Prefer a fresh WLD entry seeded from holdings (one Alchemy balances call).
+    // Fresh WLD (including holdings-seeded) — skip a second Alchemy call.
     const cachedWld = cacheGet<WldBalanceValue>(WLD_NS, walletAddress);
     if (cachedWld.hit && !cachedWld.stale) {
       return { value: cachedWld.value, fromCache: true, stale: false };
     }
 
     const holdingsLookup = cacheGet<WalletToken[]>(HOLDINGS_NS, walletAddress);
-    if (holdingsLookup.hit) {
+    if (holdingsLookup.hit && !holdingsLookup.stale) {
       const derived = wldFromHoldings(holdingsLookup.value);
       if (derived) {
         cacheSet(
@@ -192,22 +222,39 @@ export async function loadWldBalanceCached(
         return {
           value: derived,
           fromCache: true,
-          stale: holdingsLookup.stale,
+          stale: false,
         };
       }
     }
   }
 
-  return cacheGetOrLoad(
-    WLD_NS,
-    walletAddress,
-    () => fetchWldBalance(walletAddress),
-    {
-      freshMs: WLD_FRESH_MS,
-      staleMs: WLD_STALE_MS,
-      force: options?.force,
-    },
-  );
+  try {
+    return await cacheGetOrLoad(
+      WLD_NS,
+      walletAddress,
+      () =>
+        withTimeout(
+          fetchWldBalance(walletAddress),
+          WLD_TIMEOUT_MS,
+          'WLD balance timed out',
+        ),
+      {
+        freshMs: WLD_FRESH_MS,
+        staleMs: WLD_STALE_MS,
+        force: options?.force,
+      },
+    );
+  } catch {
+    const cachedWld = cacheGet<WldBalanceValue>(WLD_NS, walletAddress);
+    if (cachedWld.hit) {
+      return {
+        value: cachedWld.value,
+        fromCache: true,
+        stale: true,
+      };
+    }
+    return { value: fallbackZero, fromCache: false, stale: false };
+  }
 }
 
 /**
@@ -225,6 +272,11 @@ export async function loadForageScanCached(
   await loadAllowlistOverlayCached();
 
   const keyed = scanCacheKey(walletAddress, mode);
+  const flightKey = `${keyed}:${options?.force ? 'force' : 'soft'}`;
+  const existingFlight = scanInflight.get(flightKey);
+  if (existingFlight && !options?.force) {
+    return existingFlight;
+  }
 
   if (options?.force) {
     if (mode === 'full') {
@@ -270,24 +322,61 @@ export async function loadForageScanCached(
     }
   }
 
+  const work = runForageScan(walletAddress, mode, Boolean(options?.force), keyed);
+  scanInflight.set(flightKey, work);
+  try {
+    return await work;
+  } finally {
+    if (scanInflight.get(flightKey) === work) {
+      scanInflight.delete(flightKey);
+    }
+  }
+}
+
+async function runForageScan(
+  walletAddress: string,
+  mode: ForageScanMode,
+  force: boolean,
+  keyed: string,
+): Promise<ForageScanPayload & { fromCache: boolean; holdingsStale: boolean }> {
   const { holdings, stale: holdingsStale } = await loadWalletHoldingsCached(
     walletAddress,
     {
-      force: Boolean(options?.force),
+      force,
       // Fast path: lighter metadata so quotes start sooner.
-      maxEnrich: mode === 'fast' ? 36 : 72,
+      maxEnrich: mode === 'fast' ? 24 : 48,
       enrichMetadata: true,
     },
   );
 
-  const { swappable, excluded } = await withTimeout(
-    scanWalletForForage(holdings, walletAddress, {
-      budgetMs: SCAN_BUDGET_MS[mode],
-      mode,
-    }),
-    SCAN_TIMEOUT_MS[mode],
-    'Liquidity scan timed out. Tap Rescan Wallet to try again.',
-  );
+  let swappable: WalletToken[];
+  let excluded: ScannedExclusion[];
+  try {
+    const scanned = await withTimeout(
+      scanWalletForForage(holdings, walletAddress, {
+        budgetMs: SCAN_BUDGET_MS[mode],
+        mode,
+      }),
+      SCAN_TIMEOUT_MS[mode],
+      'Liquidity scan timed out. Tap Rescan Wallet to try again.',
+    );
+    swappable = scanned.swappable;
+    excluded = scanned.excluded;
+  } catch (error) {
+    const previous =
+      peekForageScanCache(walletAddress) ??
+      getCachedWalletScan(scanCacheKey(walletAddress, mode));
+    if (previous) {
+      return {
+        tokens: previous.tokens,
+        excluded: previous.excluded,
+        mode: (previous as ForageScanPayload).mode ?? mode,
+        fromCache: true,
+        holdingsStale,
+      };
+    }
+    throw error;
+  }
 
   // Guarantee display metadata on forageable + a slice of visible junk.
   // Cap excluded enrich so DexScreener fan-out cannot starve the response.
@@ -365,6 +454,8 @@ export async function loadForageScanCached(
       decimals: meta.decimals || token.decimals,
       logoUrl: meta.logoUrl ?? token.logoUrl,
       balanceFormatted: formatBalanceKeepRaw(token, meta),
+      priceUsd: meta.priceUsd ?? token.priceUsd,
+      priceChange24h: meta.priceChange24h ?? token.priceChange24h,
     };
   });
   let enrichedExcluded = excluded.map((token) => {
@@ -377,9 +468,11 @@ export async function loadForageScanCached(
       symbol: meta.symbol || token.symbol,
       name: meta.name || token.name,
       logoUrl: meta.logoUrl ?? token.logoUrl,
+      priceUsd: meta.priceUsd ?? token.priceUsd,
+      priceChange24h: meta.priceChange24h ?? token.priceChange24h,
     };
   });
-  if (enrichTargets.length > 0) {
+  if (enrichTargets.length > 0 && mode !== 'fast') {
     const enriched = await enrichTokenMetadata(enrichTargets);
     const byAddress = new Map(
       enriched.map((token) => [token.address.toLowerCase(), token]),
@@ -394,6 +487,8 @@ export async function loadForageScanCached(
             decimals: meta.decimals,
             logoUrl: meta.logoUrl ?? token.logoUrl,
             balanceFormatted: formatBalanceKeepRaw(token, meta),
+            priceUsd: meta.priceUsd ?? token.priceUsd,
+            priceChange24h: meta.priceChange24h ?? token.priceChange24h,
           }
         : token;
     });
@@ -405,6 +500,8 @@ export async function loadForageScanCached(
             symbol: meta.symbol,
             name: meta.name,
             logoUrl: meta.logoUrl ?? token.logoUrl,
+            priceUsd: meta.priceUsd ?? token.priceUsd,
+            priceChange24h: meta.priceChange24h ?? token.priceChange24h,
           }
         : token;
     });
@@ -417,7 +514,7 @@ export async function loadForageScanCached(
   };
 
   // Never let a starved full pass replace a warm forageable list with [].
-  if (enrichedSwappable.length === 0 && mode === 'full' && !options?.force) {
+  if (enrichedSwappable.length === 0 && mode === 'full' && !force) {
     const previous =
       getCachedWalletScan(scanCacheKey(walletAddress, 'fast')) ??
       getCachedWalletScan(walletAddress);

@@ -5,7 +5,26 @@ import { WorldAtmosphere } from '@/components/WorldAtmosphere';
 import ClientProviders from '@/providers';
 import '@worldcoin/mini-apps-ui-kit-react/styles.css';
 import type { Metadata } from 'next';
+import { Doto, Inter, Inter_Tight } from 'next/font/google';
 import './globals.css';
+
+const interTight = Inter_Tight({
+  subsets: ['latin'],
+  variable: '--font-inter-tight',
+  display: 'swap',
+});
+
+const inter = Inter({
+  subsets: ['latin'],
+  variable: '--font-inter',
+  display: 'swap',
+});
+
+const doto = Doto({
+  subsets: ['latin'],
+  variable: '--font-doto',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: 'Forager',
@@ -24,7 +43,10 @@ export default async function RootLayout({
 }>) {
   const session = await auth();
   return (
-    <html lang="en" className="h-dvh overflow-hidden">
+    <html
+      lang="en"
+      className={`${interTight.variable} ${inter.variable} ${doto.variable} h-dvh overflow-hidden`}
+    >
       <head>
         <link rel="preload" as="image" href={APP_LOGO_SRC} />
         <link rel="preload" as="image" href={FORAGE_SPRITE_SRC} />

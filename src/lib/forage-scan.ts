@@ -37,6 +37,8 @@ export type ScannedExclusion = {
   name: string;
   balanceFormatted: string;
   logoUrl?: string | null;
+  priceUsd?: number | null;
+  priceChange24h?: number | null;
   reason: ScanExclusionReason;
   reasonLabel: string;
 };
@@ -95,6 +97,8 @@ function toExclusion(
     name: token.name,
     balanceFormatted: token.balanceFormatted,
     logoUrl: token.logoUrl,
+    priceUsd: token.priceUsd,
+    priceChange24h: token.priceChange24h,
     reason,
     reasonLabel: reasonLabel ?? scanExclusionLabel(reason),
   };
@@ -176,6 +180,7 @@ async function quoteTokenLiquidity(
   const route = await quoteRouteToWld(token, {
     skipRetry: mode === 'fast',
     firstSuccess: mode === 'fast',
+    directOnly: mode === 'fast',
   });
   if (!route) {
     return { route: null, reason: 'no_liquidity' };
@@ -359,7 +364,8 @@ export async function scanWalletForForage(
     }
     swappable.push({
       ...token,
-      cachedRoute: serializeRoute(route),
+      // Fast firstSuccess amounts must not become the displayed/build quote.
+      cachedRoute: mode === 'fast' ? null : serializeRoute(route),
     });
     portalQueue.push({ address: token.address, symbol: token.symbol });
   }

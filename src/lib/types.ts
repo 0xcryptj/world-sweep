@@ -6,7 +6,11 @@ export type WalletToken = {
   balance: string;
   balanceFormatted: string;
   logoUrl?: string | null;
-  /** Serialized Uniswap route from the liquidity scan — avoids re-quoting on preview. */
+  /** USD spot from DexScreener — display only, never a swap input. */
+  priceUsd?: number | null;
+  /** 24h percent change from DexScreener — display only. */
+  priceChange24h?: number | null;
+  /** Serialized Uniswap route from the full liquidity scan. */
   cachedRoute?: CachedRouteQuote | null;
 };
 

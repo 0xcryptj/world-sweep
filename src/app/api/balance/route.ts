@@ -2,7 +2,7 @@ import { loadWldBalanceCached } from '@/lib/wallet-data';
 import { sanitizeErrorMessage } from '@/lib/safe-error';
 import { NextResponse } from 'next/server';
 
-export const maxDuration = 30;
+export const maxDuration = 8;
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
@@ -18,9 +18,12 @@ export async function GET(request: Request) {
   }
 
   try {
-    const { value: wld, fromCache } = await loadWldBalanceCached(address, {
-      force: refresh,
-    });
+    const { value: wld, fromCache, stale } = await loadWldBalanceCached(
+      address,
+      {
+        force: refresh,
+      },
+    );
     return NextResponse.json(
       {
         wldBalance: wld.balanceFormatted,
@@ -30,7 +33,7 @@ export async function GET(request: Request) {
       {
         headers: {
           'Cache-Control': 'private, max-age=0, stale-while-revalidate=30',
-          'X-Forager-Cache': fromCache ? 'HIT' : 'MISS',
+          'X-Forager-Cache': fromCache ? (stale ? 'STALE' : 'HIT') : 'MISS',
         },
       },
     );

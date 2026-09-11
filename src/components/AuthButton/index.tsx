@@ -57,7 +57,7 @@ export const AuthButton = () => {
   }
 
   return (
-    <div className="flex w-full flex-col items-center gap-3">
+    <div className="forager-cta-wrap flex w-full flex-col items-center gap-3">
       <LiveFeedback
         label={{
           failed: 'Sign in failed',

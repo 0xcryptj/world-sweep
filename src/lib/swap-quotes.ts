@@ -19,8 +19,10 @@ import {
 } from './constants';
 import {
   getCachedRoute,
+  getInflightRoute,
   routeCacheKey,
   setCachedRoute,
+  setInflightRoute,
 } from './quote-cache';
 import { publicClient } from './tokens';
 import { withTimeout } from './fetch-with-timeout';
@@ -562,52 +564,37 @@ export async function quoteRouteToWld(
     if (cached !== undefined) {
       return cached;
     }
-  }
-
-  if (token.cachedRoute && !options?.directOnly) {
-    const route = deserializeRoute(token.cachedRoute);
-    setCachedRoute(cacheKey, route);
-    return route;
-  }
-
-  const tokenIn = getAddress(token.address) as Address;
-  const amountIn = BigInt(token.balance);
-
-  if (amountIn <= BigInt(0)) {
-    if (useSharedCache) {
-      setCachedRoute(cacheKey, null);
+    const inflight = getInflightRoute(cacheKey);
+    if (inflight) {
+      return inflight;
     }
-    return null;
   }
 
-  // Return any positive quoter route. MIN_WLD_OUT is enforced by callers
-  // (forage-scan / build-sweep) so under-min tokens are labeled output_too_small
-  // instead of being misreported as no_liquidity.
-  let route: RouteQuote | null = null;
-  let transportFailed = false;
-  try {
-    route = await quoteRouteToWldOnce(token, tokenIn, amountIn, {
-      directOnly: options?.directOnly,
-      firstSuccess: options?.firstSuccess,
-    });
-  } catch (error) {
-    if (!isQuoterTransportError(error)) {
-      throw error;
+  // Never reuse a client/scan cachedRoute here. Fast-scan firstSuccess
+  // routes used to be written into the `best` key and then disagreed
+  // with build-sweep's live quoter amounts.
+
+  const work = (async () => {
+    const tokenIn = getAddress(token.address) as Address;
+    const amountIn = BigInt(token.balance);
+
+    if (amountIn <= BigInt(0)) {
+      if (useSharedCache) {
+        setCachedRoute(cacheKey, null);
+      }
+      return null;
     }
-    route = null;
-    transportFailed = true;
-  }
 
-  // Only retry on transport failures — not when all fee tiers / bridges
-  // returned a definitive no-pool null (that just doubles Alchemy CU).
-  if (!route && transportFailed && !options?.skipRetry) {
+    // Return any positive quoter route. MIN_WLD_OUT is enforced by callers
+    // (forage-scan / build-sweep) so under-min tokens are labeled output_too_small
+    // instead of being misreported as no_liquidity.
+    let route: RouteQuote | null = null;
+    let transportFailed = false;
     try {
-      await new Promise((resolve) => setTimeout(resolve, 280));
       route = await quoteRouteToWldOnce(token, tokenIn, amountIn, {
         directOnly: options?.directOnly,
         firstSuccess: options?.firstSuccess,
       });
-      transportFailed = false;
     } catch (error) {
       if (!isQuoterTransportError(error)) {
         throw error;
@@ -615,18 +602,42 @@ export async function quoteRouteToWld(
       route = null;
       transportFailed = true;
     }
-  }
 
-  if (transportFailed && !route) {
-    throw new QuoteTransportError(
-      `Quote RPC failed for ${token.symbol || token.address}`,
-    );
-  }
+    // Only retry on transport failures — not when all fee tiers / bridges
+    // returned a definitive no-pool null (that just doubles Alchemy CU).
+    if (!route && transportFailed && !options?.skipRetry) {
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 280));
+        route = await quoteRouteToWldOnce(token, tokenIn, amountIn, {
+          directOnly: options?.directOnly,
+          firstSuccess: options?.firstSuccess,
+        });
+        transportFailed = false;
+      } catch (error) {
+        if (!isQuoterTransportError(error)) {
+          throw error;
+        }
+        route = null;
+        transportFailed = true;
+      }
+    }
+
+    if (transportFailed && !route) {
+      throw new QuoteTransportError(
+        `Quote RPC failed for ${token.symbol || token.address}`,
+      );
+    }
+
+    if (useSharedCache) {
+      setCachedRoute(cacheKey, route);
+    }
+    return route;
+  })();
 
   if (useSharedCache) {
-    setCachedRoute(cacheKey, route);
+    setInflightRoute(cacheKey, work);
   }
-  return route;
+  return work;
 }
 
 /** True when the token has a quotable Uniswap route with enough WLD output after slippage. */
