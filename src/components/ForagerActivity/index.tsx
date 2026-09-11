@@ -97,8 +97,6 @@ export function ForagerActivity({
     return index;
   }, [safeMessages.length, timedProgress]);
 
-  const progress = Math.min(1, Math.max(0, timedProgress));
-
   return (
     <div
       className={`forager-activity-overlay ${className}`}
