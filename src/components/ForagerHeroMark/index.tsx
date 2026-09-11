@@ -1,4 +1,3 @@
-import { GlareHover } from '@/components/ui/glare-hover';
 import { APP_LOGO_SRC, APP_NAME } from '@/lib/branding';
 import { cn } from '@/lib/utils';
 
@@ -23,25 +22,16 @@ export function ForagerHeroMark({
       style={{ width: size, height: size }}
     >
       <span className="forager-hero-bloom" aria-hidden />
-      <span className="forager-hero-bloom forager-hero-bloom-gold" aria-hidden />
-      <GlareHover
-        autoPlay={animated}
-        glareColor="#ffffff"
-        glareOpacity={0.58}
-        glareSize={220}
-        className="relative z-[1] h-full w-full overflow-hidden rounded-[28px]"
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={APP_LOGO_SRC}
-          alt={`${APP_NAME} logo`}
-          width={size}
-          height={size}
-          className="forager-hero-sprite"
-          decoding="async"
-          fetchPriority="high"
-        />
-      </GlareHover>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={APP_LOGO_SRC}
+        alt={`${APP_NAME} logo`}
+        width={size}
+        height={size}
+        className="forager-hero-sprite"
+        decoding="async"
+        fetchPriority="high"
+      />
     </div>
   );
 }

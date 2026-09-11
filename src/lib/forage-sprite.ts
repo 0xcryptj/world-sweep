@@ -8,4 +8,4 @@ export const FORAGE_SPRITE_SRC = withBasePath(
 export const FORAGE_SPRITE_FRAME_COUNT = 17;
 export const FORAGE_SPRITE_FRAME_WIDTH = 330;
 export const FORAGE_SPRITE_FRAME_HEIGHT = 246;
-export const FORAGE_SPRITE_DURATION_MS = 1900;
+export const FORAGE_SPRITE_DURATION_MS = 4800;

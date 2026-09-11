@@ -64,7 +64,7 @@ export function GlobalMetrics({ compact = false }: GlobalMetricsProps) {
     <div className="forager-group relative grid grid-cols-3 items-stretch overflow-hidden">
       <ShineBorder
         borderWidth={1}
-        duration={12}
+        duration={18}
         shineColor={['transparent', '#ffffff', 'transparent']}
       />
       <div className="flex min-w-0 flex-col justify-center gap-1 px-4 py-3.5">

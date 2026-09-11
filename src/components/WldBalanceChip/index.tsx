@@ -1,7 +1,6 @@
 'use client';
 
 import { TokenIcon } from '@/components/Sweep/TokenIcon';
-import { ShineBorder } from '@/components/ui/shine-border';
 import { apiPath } from '@/lib/base-path';
 import { hapticImpact, hapticSelection } from '@/lib/haptics';
 import { cn } from '@/lib/utils';
@@ -128,11 +127,6 @@ export function WldBalanceChip({ className = '' }: WldBalanceChipProps) {
       className={cn('forager-balance-chip', className)}
       aria-label="Refresh WLD balance"
     >
-      <ShineBorder
-        borderWidth={1}
-        duration={10}
-        shineColor={['#ffffff', '#a3a3a3', '#ffffff']}
-      />
       <TokenIcon
         size="xs"
         address="0x2cFc85d8E48F8EAB294be644d9E25C3030863003"

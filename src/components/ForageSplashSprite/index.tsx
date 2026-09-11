@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 import type { CSSProperties } from 'react';
 
 type ForageSplashSpriteProps = {
-  variant?: 'hero' | 'ambient';
+  variant?: 'hero' | 'ambient' | 'backdrop';
   className?: string;
 };
 
@@ -20,9 +20,11 @@ export function ForageSplashSprite({
     <div
       className={cn(
         'forager-forage-sprite',
-        variant === 'ambient'
-          ? 'forager-forage-sprite-ambient'
-          : 'forager-forage-sprite-hero',
+        variant === 'backdrop'
+          ? 'forager-forage-sprite-backdrop'
+          : variant === 'ambient'
+            ? 'forager-forage-sprite-ambient'
+            : 'forager-forage-sprite-hero',
         className,
       )}
       style={

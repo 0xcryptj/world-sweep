@@ -1,3 +1,8 @@
+'use client';
+
+import { FlickeringGrid } from '@/components/ui/flickering-grid';
+import { ForageSplashSprite } from '@/components/ForageSplashSprite';
+
 export function WorldAtmosphere() {
   return (
     <div
@@ -5,8 +10,9 @@ export function WorldAtmosphere() {
       aria-hidden
     >
       <div className="world-atmosphere__gradient absolute inset-0" />
+      <ForageSplashSprite variant="backdrop" />
+      <FlickeringGrid className="absolute inset-0" />
       <div className="world-atmosphere__veil absolute inset-0" />
-      <div className="world-atmosphere__spec absolute inset-0" />
     </div>
   );
 }

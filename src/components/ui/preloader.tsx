@@ -2,7 +2,6 @@
 
 import { ForageSplashSprite } from '@/components/ForageSplashSprite';
 import { AnimatedShinyText } from '@/components/ui/animated-shiny-text';
-import { Ripple } from '@/components/ui/ripple';
 import { SparklesText } from '@/components/ui/sparkles-text';
 import { cn } from '@/lib/utils';
 import { APP_NAME, APP_TAGLINE } from '@/lib/branding';
@@ -58,9 +57,9 @@ export function Preloader({
       });
 
       tl.to(stage, {
-        scale: 1.72,
+        scale: 1.18,
         opacity: 0,
-        duration: 0.78,
+        duration: 0.92,
         ease: 'power2.in',
       });
 
@@ -70,10 +69,10 @@ export function Preloader({
           yPercent: -108,
           borderBottomLeftRadius: '50% 22%',
           borderBottomRightRadius: '50% 22%',
-          duration: 1.12,
+          duration: 1.28,
           ease: 'power3.inOut',
         },
-        '<0.06',
+        '<0.08',
       );
     },
     { dependencies: [ready, onComplete] },
@@ -87,17 +86,8 @@ export function Preloader({
       className={cn('forager-preloader', className)}
     >
       <div className="forager-splash-wash" />
-      <div className="forager-saas-grid pointer-events-none absolute inset-0" />
-      <ForageSplashSprite variant="ambient" />
-      <div className="forager-splash-vignette" />
       <div ref={stageRef} className="forager-splash-stage">
         <div className="forager-splash-mark">
-          <Ripple
-            className="forager-splash-ripple"
-            mainCircleSize={168}
-            mainCircleOpacity={0.16}
-            numCircles={5}
-          />
           <ForageSplashSprite variant="hero" />
         </div>
         <div className="forager-splash-copy">
@@ -105,7 +95,7 @@ export function Preloader({
             World Chain
           </AnimatedShinyText>
           <SparklesText
-            sparklesCount={5}
+            sparklesCount={4}
             className="forager-display forager-splash-title"
           >
             {APP_NAME}

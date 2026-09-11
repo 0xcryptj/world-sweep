@@ -5,7 +5,7 @@ import { useMiniKit } from '@worldcoin/minikit-js/minikit-provider';
 import { ReactNode, useCallback, useEffect, useState } from 'react';
 import { Preloader } from '@/components/ui/preloader';
 
-const MIN_SPLASH_MS = 2000;
+const MIN_SPLASH_MS = 3200;
 
 type SplashGateProps = {
   children: ReactNode;
