@@ -6,7 +6,6 @@ import { TokenBadge } from '@/components/TokenBadge';
 import { ShineBorder } from '@/components/ui/shine-border';
 import { TokenIcon } from '@/components/Sweep/TokenIcon';
 import { apiPath } from '@/lib/base-path';
-import { shortenAddress } from '@/lib/forage-stats-types';
 import { FetchTimeoutError, fetchWithTimeout } from '@/lib/fetch-with-timeout';
 import { WLD_ADDRESS } from '@/lib/constants';
 import { hapticImpact, hapticNotification, hapticSelection } from '@/lib/haptics';
@@ -50,6 +49,7 @@ export function WalletPanel() {
 
   const walletAddress =
     session?.user?.walletAddress ?? MiniKit.user?.walletAddress ?? '';
+  const username = session?.user?.username ?? MiniKit.user?.username ?? '';
 
   useEffect(() => {
     hasDataRef.current = Boolean(data);
@@ -239,10 +239,11 @@ export function WalletPanel() {
         <button
           type="button"
           onClick={() => void copyAddress()}
+          aria-label="Copy wallet address"
           className="mt-4 flex w-full items-center justify-between gap-3 rounded-full border border-white/10 bg-white/5 px-4 py-3 text-left text-[15px]"
         >
-          <span className="truncate forager-numeric text-forager-text-muted">
-            {shortenAddress(walletAddress)}
+          <span className="truncate text-forager-text-muted">
+            {username || 'World App wallet'}
           </span>
           <span className="shrink-0 font-medium text-forager-accent">
             {copied ? 'Copied' : 'Copy'}

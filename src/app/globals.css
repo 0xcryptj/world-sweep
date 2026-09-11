@@ -23,6 +23,8 @@
   --forager-border-strong: rgba(255, 255, 255, 0.16);
   --forager-separator: rgba(255, 255, 255, 0.1);
   --forager-hero-glow: rgb(255 255 255 / 8%);
+  --forager-moss: 52 110 58;
+  --forager-moss-deep: 18 42 24;
   --forager-nav-height: 3.0625rem;
   --forager-action-height: 3.125rem;
   --forager-radius-sm: 10px;
@@ -147,9 +149,13 @@
 
 html,
 body {
-  overflow-x: hidden;
-  overscroll-behavior-x: none;
+  width: 100%;
+  max-width: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  overscroll-behavior: none;
   touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
 }
 
 body {
@@ -421,8 +427,9 @@ th {
 
 .world-atmosphere__gradient {
   background:
-    radial-gradient(ellipse 90% 42% at 50% -8%, rgb(255 255 255 / 10%), transparent 58%),
-    radial-gradient(ellipse 50% 30% at 88% 8%, rgb(255 255 255 / 5%), transparent 52%),
+    radial-gradient(ellipse 90% 42% at 50% -8%, rgb(255 255 255 / 8%), transparent 58%),
+    radial-gradient(ellipse 72% 48% at 50% 12%, rgb(var(--forager-moss) / 12%), transparent 64%),
+    radial-gradient(ellipse 50% 30% at 88% 8%, rgb(255 255 255 / 4%), transparent 52%),
     #000;
 }
 
@@ -437,7 +444,7 @@ th {
 .forager-scroll {
   overflow-x: hidden;
   overflow-y: auto;
-  overscroll-behavior-y: contain;
+  overscroll-behavior: none;
   touch-action: pan-y;
   -webkit-overflow-scrolling: touch;
 }
@@ -1208,6 +1215,36 @@ th {
   border-bottom-left-radius: 0;
   border-bottom-right-radius: 0;
   box-shadow: 0 28px 80px rgb(0 0 0 / 55%);
+  overscroll-behavior: none;
+}
+
+.forager-splash-wash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      ellipse 88% 62% at 50% 36%,
+      rgb(var(--forager-moss) / 0.34),
+      transparent 58%
+    ),
+    radial-gradient(
+      ellipse 80% 46% at 18% 78%,
+      rgb(var(--forager-moss-deep) / 0.55),
+      transparent 52%
+    ),
+    radial-gradient(
+      ellipse 90% 48% at 82% 88%,
+      rgb(var(--forager-moss) / 0.16),
+      transparent 48%
+    ),
+    linear-gradient(
+      180deg,
+      #000 0%,
+      rgb(var(--forager-moss-deep) / 0.72) 46%,
+      #000 100%
+    );
+  animation: splash-green-breathe 5.6s ease-in-out infinite;
 }
 
 .forager-preloader::after {
@@ -1219,9 +1256,9 @@ th {
   height: 1px;
   background: linear-gradient(
     90deg,
-    transparent 10%,
-    rgb(255 255 255 / 58%) 50%,
-    transparent 90%
+    transparent 12%,
+    rgb(var(--forager-moss) / 0.42) 50%,
+    transparent 88%
   );
   pointer-events: none;
 }
@@ -1230,8 +1267,19 @@ th {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse 80% 55% at 50% 42%, transparent 0%, rgb(0 0 0 / 35%) 58%, #000 100%);
+    radial-gradient(
+      ellipse 78% 54% at 50% 40%,
+      transparent 0%,
+      rgb(0 0 0 / 22%) 58%,
+      rgb(0 0 0 / 78%) 100%
+    );
   pointer-events: none;
+}
+
+.forager-splash-ripple .animate-ripple {
+  border-color: rgb(var(--forager-moss) / 0.32);
+  background: rgb(var(--forager-moss) / 0.08);
+  box-shadow: 0 0 24px rgb(var(--forager-moss) / 0.14);
 }
 
 .forager-splash-stage {
@@ -1312,8 +1360,128 @@ th {
   position: relative;
   display: grid;
   place-items: center;
-  width: 16.5rem;
-  height: 16.5rem;
+  width: min(20.75rem, 86vw);
+  height: auto;
+  aspect-ratio: var(--forage-aspect, 330 / 246);
+}
+
+.forager-forage-sprite {
+  pointer-events: none;
+}
+
+.forager-forage-frame {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  width: 100%;
+  aspect-ratio: var(--forage-aspect, 330 / 246);
+  border-radius: 22px;
+}
+
+.forager-forage-sheet {
+  position: absolute;
+  inset: 0;
+  background-repeat: no-repeat;
+  background-position: 0 0;
+  background-size: calc(var(--forage-n, 17) * 100%) 100%;
+  animation: forage-play 1.9s steps(16) infinite;
+  image-rendering: pixelated;
+}
+
+.forager-forage-veil {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.forager-forage-sprite-hero {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  animation: splash-sprite-in 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.08s both;
+  filter: drop-shadow(0 22px 34px rgb(0 0 0 / 82%))
+    drop-shadow(0 8px 16px rgb(0 0 0 / 55%));
+}
+
+.forager-forage-sprite-hero .forager-forage-frame {
+  overflow: hidden;
+  border-radius: 24px;
+  box-shadow: inset 0 -32px 44px rgb(0 0 0 / 0.52);
+  -webkit-mask-image: radial-gradient(
+    ellipse 96% 92% at 50% 48%,
+    #000 38%,
+    rgb(0 0 0 / 0.94) 64%,
+    rgb(0 0 0 / 0.5) 84%,
+    transparent 100%
+  );
+  mask-image: radial-gradient(
+    ellipse 96% 92% at 50% 48%,
+    #000 38%,
+    rgb(0 0 0 / 0.94) 64%,
+    rgb(0 0 0 / 0.5) 84%,
+    transparent 100%
+  );
+}
+
+.forager-forage-sprite-hero .forager-forage-sheet {
+  filter: brightness(0.78) saturate(0.86);
+}
+
+.forager-forage-sprite-hero .forager-forage-veil {
+  background: linear-gradient(
+    180deg,
+    rgb(0 0 0 / 0.34) 0%,
+    rgb(0 0 0 / 0.46) 48%,
+    rgb(0 0 0 / 0.62) 100%
+  );
+  box-shadow:
+    inset 0 0 56px rgb(0 0 0 / 0.5),
+    inset 0 0 22px rgb(0 0 0 / 0.32);
+}
+
+.forager-forage-sprite-ambient {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.forager-forage-sprite-ambient .forager-forage-frame {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  width: min(46rem, 168vw);
+  border-radius: 0;
+  opacity: 0.5;
+  transform: translate(-50%, -50%);
+  filter: brightness(0.38) saturate(0.62);
+  -webkit-mask-image: radial-gradient(
+    ellipse 62% 52% at 50% 46%,
+    #000 20%,
+    rgb(0 0 0 / 0.55) 52%,
+    transparent 78%
+  );
+  mask-image: radial-gradient(
+    ellipse 62% 52% at 50% 46%,
+    #000 20%,
+    rgb(0 0 0 / 0.55) 52%,
+    transparent 78%
+  );
+}
+
+.forager-forage-sprite-ambient .forager-forage-veil {
+  background: rgb(0 0 0 / 0.62);
+  box-shadow: inset 0 0 140px 48px rgb(0 0 0 / 0.86);
+}
+
+@keyframes forage-play {
+  from {
+    background-position: 0 0;
+  }
+
+  to {
+    background-position: 100% 0;
+  }
 }
 
 .forager-splash-copy {
@@ -1401,6 +1569,17 @@ th {
   }
 }
 
+@keyframes splash-green-breathe {
+  0%,
+  100% {
+    opacity: 0.82;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
 .forager-tab {
   color: #8e8e93;
 }
@@ -1415,6 +1594,9 @@ th {
   .forager-hero-mark-animated .forager-hero-bloom,
   .forager-hero-mark-animated .forager-hero-bloom-gold,
   .forager-hero-mark-animated .forager-hero-sprite,
+  .forager-forage-sheet,
+  .forager-forage-sprite-hero,
+  .forager-splash-wash,
   .forager-splash-copy,
   .forager-glass-scan-halo,
   .forager-glass-scan-sweep,
@@ -1447,6 +1629,10 @@ th {
   .forager-firefly {
     animation: none;
     opacity: 0.7;
+  }
+
+  .forager-forage-sheet {
+    background-position: 100% 0;
   }
 }
 

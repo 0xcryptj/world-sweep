@@ -15,7 +15,7 @@ export function AppHeader({
   username,
   profilePictureUrl,
 }: AppHeaderProps) {
-  const avatarInitial = username?.trim()?.charAt(0).toUpperCase() ?? 'W';
+  const avatarInitial = username?.trim()?.charAt(0).toUpperCase() ?? 'F';
 
   return (
     <div className="flex items-center justify-between gap-3">

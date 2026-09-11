@@ -1,5 +1,6 @@
 import { auth } from '@/auth';
 import { APP_LOGO_SRC } from '@/lib/branding';
+import { FORAGE_SPRITE_SRC } from '@/lib/forage-sprite';
 import { WorldAtmosphere } from '@/components/WorldAtmosphere';
 import ClientProviders from '@/providers';
 import '@worldcoin/mini-apps-ui-kit-react/styles.css';
@@ -23,11 +24,12 @@ export default async function RootLayout({
 }>) {
   const session = await auth();
   return (
-    <html lang="en" className="overflow-x-hidden">
+    <html lang="en" className="h-dvh overflow-hidden">
       <head>
         <link rel="preload" as="image" href={APP_LOGO_SRC} />
+        <link rel="preload" as="image" href={FORAGE_SPRITE_SRC} />
       </head>
-      <body className="relative overflow-x-hidden bg-forager-bg text-foreground antialiased">
+      <body className="relative h-dvh overflow-hidden bg-forager-bg text-foreground antialiased">
         <WorldAtmosphere />
         <ClientProviders session={session}>{children}</ClientProviders>
       </body>

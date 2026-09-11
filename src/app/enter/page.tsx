@@ -9,6 +9,7 @@ import { SparklesText } from '@/components/ui/sparkles-text';
 export default function EnterPage() {
   return (
     <Page className="relative z-10">
+      <div className="forager-splash-wash" />
       <div className="forager-saas-grid pointer-events-none absolute inset-0" />
       <Page.Main className="relative z-10 flex flex-col items-center justify-center py-10">
         <div className="flex w-full max-w-[22rem] flex-col items-center gap-8 text-center">

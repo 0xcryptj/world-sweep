@@ -6,7 +6,6 @@ import { NotifyOptIn } from '@/components/Growth/NotifyOptIn';
 import { WidgetPrompt } from '@/components/Growth/WidgetPrompt';
 import {
   formatWldAmount,
-  shortenAddress,
   type LeaderboardResponse,
 } from '@/lib/forage-stats-types';
 import { apiPath } from '@/lib/base-path';
@@ -48,7 +47,7 @@ export function ProfileStats() {
             {user.username}
           </p>
           <p className="mt-1 text-[15px] text-forager-text-muted">
-            {shortenAddress(user.walletAddress)}
+            Signed in with World App
           </p>
         </div>
       </div>

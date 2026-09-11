@@ -1,6 +1,6 @@
 'use client';
 
-import { ForagerHeroMark } from '@/components/ForagerHeroMark';
+import { ForageSplashSprite } from '@/components/ForageSplashSprite';
 import { AnimatedShinyText } from '@/components/ui/animated-shiny-text';
 import { Ripple } from '@/components/ui/ripple';
 import { SparklesText } from '@/components/ui/sparkles-text';
@@ -86,12 +86,19 @@ export function Preloader({
       aria-busy={!ready}
       className={cn('forager-preloader', className)}
     >
+      <div className="forager-splash-wash" />
       <div className="forager-saas-grid pointer-events-none absolute inset-0" />
+      <ForageSplashSprite variant="ambient" />
       <div className="forager-splash-vignette" />
       <div ref={stageRef} className="forager-splash-stage">
         <div className="forager-splash-mark">
-          <Ripple mainCircleSize={148} mainCircleOpacity={0.2} numCircles={6} />
-          <ForagerHeroMark animated size={220} />
+          <Ripple
+            className="forager-splash-ripple"
+            mainCircleSize={168}
+            mainCircleOpacity={0.16}
+            numCircles={5}
+          />
+          <ForageSplashSprite variant="hero" />
         </div>
         <div className="forager-splash-copy">
           <AnimatedShinyText className="forager-splash-kicker text-white/55">
