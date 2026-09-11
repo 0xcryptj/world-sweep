@@ -2,8 +2,10 @@
 
 import { walletAuth } from '@/auth/wallet';
 import { ForagerButton } from '@/components/ForagerButton';
+import { WorldMark } from '@/components/WorldMark';
 import { hapticImpact, hapticNotification } from '@/lib/haptics';
 import { LiveFeedback } from '@worldcoin/mini-apps-ui-kit-react';
+import { MiniKit } from '@worldcoin/minikit-js';
 import { useMiniKit } from '@worldcoin/minikit-js/minikit-provider';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
@@ -15,6 +17,7 @@ export const AuthButton = () => {
   const [isPending, setIsPending] = useState(false);
   const { isInstalled } = useMiniKit();
   const hasAttemptedAuth = useRef(false);
+  const miniKitReady = isInstalled === true && MiniKit.isInstalled();
 
   useEffect(() => {
     if (status === 'authenticated') {
@@ -23,7 +26,7 @@ export const AuthButton = () => {
   }, [router, status]);
 
   const runWalletAuth = useCallback(async () => {
-    if (!isInstalled || isPending) {
+    if (!isInstalled || !miniKitReady || isPending) {
       return;
     }
 
@@ -39,18 +42,19 @@ export const AuthButton = () => {
     } finally {
       setIsPending(false);
     }
-  }, [isInstalled, isPending, router]);
+  }, [isInstalled, isPending, miniKitReady, router]);
 
   useEffect(() => {
     if (
       status === 'unauthenticated' &&
       isInstalled === true &&
+      miniKitReady &&
       !hasAttemptedAuth.current
     ) {
       hasAttemptedAuth.current = true;
       void runWalletAuth();
     }
-  }, [isInstalled, runWalletAuth, status]);
+  }, [isInstalled, miniKitReady, runWalletAuth, status]);
 
   if (status === 'loading' || status === 'authenticated') {
     return null;
@@ -73,7 +77,10 @@ export const AuthButton = () => {
           variant="primary"
           className="w-full min-w-[220px]"
         >
-          Sign in with World
+          <span className="inline-flex items-center justify-center gap-2">
+            <WorldMark size={18} />
+            Sign in with World
+          </span>
         </ForagerButton>
       </LiveFeedback>
       {!isInstalled ? (

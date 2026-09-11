@@ -84,13 +84,11 @@ export function Preloader({
       aria-busy={!ready}
       className={cn('forager-preloader', className)}
     >
-      <div className="forager-splash-wash" />
       <div className="forager-splash-vignette" />
       <div ref={stageRef} className="forager-splash-stage">
         <div className="forager-splash-mark">
           <ForageSplashSprite variant="hero" />
         </div>
-        <div className="forager-splash-green-blend" />
         <div className="forager-splash-copy">
           <ForagerPixelMark size={72} className="forager-pixel-mark-splash" />
           <h1 className="forager-display forager-splash-title">{APP_NAME}</h1>

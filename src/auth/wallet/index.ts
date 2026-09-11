@@ -21,7 +21,15 @@ export const walletAuth = async () => {
     notBefore: new Date(Date.now() - 24 * 60 * 60 * 1000),
     statement: `Authenticate (${crypto.randomUUID().replace(/-/g, '')}).`,
   });
-  console.log('Result', result);
+
+  if (result.executedWith === 'fallback') {
+    throw new Error('Open Forager inside World App to sign in.');
+  }
+
+  const payload = result.data;
+  if (!payload?.address || !payload?.message || !payload?.signature) {
+    throw new Error('Wallet authentication was cancelled.');
+  }
 
   const signInResult = await signIn('credentials', {
     // Avoid server redirect — Auth.js treats `/home` as domain-root (404 without /world).
@@ -30,9 +38,9 @@ export const walletAuth = async () => {
     signedNonce,
     finalPayloadJson: JSON.stringify({
       status: 'success',
-      address: result.data.address,
-      message: result.data.message,
-      signature: result.data.signature,
+      address: payload.address,
+      message: payload.message,
+      signature: payload.signature,
     }),
   });
 
