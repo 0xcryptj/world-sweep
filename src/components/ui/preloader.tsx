@@ -1,5 +1,6 @@
 'use client';
 
+import { BaseScrambleHeadline } from '@/components/brand/BaseScrambleHeadline';
 import { ForageSplashSprite } from '@/components/ForageSplashSprite';
 import { cn } from '@/lib/utils';
 import { APP_NAME, APP_SIGNIN_TAGLINE } from '@/lib/branding';
@@ -89,7 +90,11 @@ export function Preloader({
           <ForageSplashSprite variant="hero" />
         </div>
         <div className="forager-splash-copy">
-          <h1 className="forager-display forager-splash-title">{APP_NAME}</h1>
+          <BaseScrambleHeadline
+            as="h1"
+            text={APP_NAME}
+            className="forager-display forager-splash-title forager-wordmark"
+          />
           <p className="forager-splash-tagline forager-support-fade">
             {APP_SIGNIN_TAGLINE}
           </p>
