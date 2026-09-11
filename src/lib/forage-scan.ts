@@ -70,7 +70,7 @@ function scanExclusionLabel(reason: ScanExclusionReason): string {
       return 'No Uniswap route to WLD';
     case 'not_allowlisted':
     case 'allowlist_pending':
-      return 'Allowlist syncing — reopen World App in a minute';
+      return 'Verified — waiting on World App allowlist';
     case 'output_too_small':
       return 'Too little liquidity to WLD';
     case 'transfer_restricted':

@@ -9,7 +9,7 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'Forager',
   description:
-    'Surface junk tokens on World Chain and reclaim them as WLD. You approve every step.',
+    'Surface leftover World Chain tokens and reclaim them as WLD. You approve every step.',
   icons: {
     icon: APP_LOGO_SRC,
     apple: APP_LOGO_SRC,

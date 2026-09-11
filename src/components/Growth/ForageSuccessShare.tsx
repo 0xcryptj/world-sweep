@@ -48,7 +48,7 @@ export function ForageSuccessShare({
           className="forager-value-green text-[28px] font-bold"
         />
         <span className="forager-subtitle text-[15px]">
-          from {tokenCount} junk token{tokenCount === 1 ? '' : 's'}
+          from {tokenCount} leftover token{tokenCount === 1 ? '' : 's'}
         </span>
       </div>
       <p className="forager-subtitle mt-3 text-[15px] leading-snug">

@@ -1,6 +1,7 @@
 'use client';
 
 import { NumberTicker } from '@/components/magicui/number-ticker';
+import { ShineBorder } from '@/components/ui/shine-border';
 import { formatWldAmount, type LeaderboardResponse } from '@/lib/forage-stats-types';
 import { apiPath } from '@/lib/base-path';
 import { useEffect, useState } from 'react';
@@ -60,7 +61,12 @@ export function GlobalMetrics({ compact = false }: GlobalMetricsProps) {
     data.totalWldReclaimed >= 100 ? 2 : data.totalWldReclaimed >= 1 ? 3 : 4;
 
   return (
-    <div className="forager-group grid grid-cols-3 items-stretch">
+    <div className="forager-group relative grid grid-cols-3 items-stretch overflow-hidden">
+      <ShineBorder
+        borderWidth={1}
+        duration={12}
+        shineColor={['transparent', '#ffffff', 'transparent']}
+      />
       <div className="flex min-w-0 flex-col justify-center gap-1 px-4 py-3.5">
         <div className="flex min-w-0 items-baseline gap-1">
           <NumberTicker

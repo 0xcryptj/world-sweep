@@ -61,6 +61,7 @@ export async function GET(request: Request) {
 
     const cachedScan = refresh ? undefined : getCachedWalletScan(address);
     let forageableByAddress: Map<string, WalletToken>;
+    let pendingAllowlistAddresses: string[] = [];
     let scanFromCache = Boolean(cachedScan);
 
     if (cachedScan) {
@@ -70,6 +71,9 @@ export async function GET(request: Request) {
           token,
         ]),
       );
+      pendingAllowlistAddresses = cachedScan.excluded
+        .filter((token) => token.reason === 'allowlist_pending')
+        .map((token) => token.address.toLowerCase());
     } else {
       // Holdings already warmed above — do not force-bust again or we pay
       // Alchemy twice on Rescan. Scan cache was cleared when refresh=1.
@@ -77,6 +81,9 @@ export async function GET(request: Request) {
       forageableByAddress = new Map(
         scan.tokens.map((token) => [token.address.toLowerCase(), token]),
       );
+      pendingAllowlistAddresses = scan.excluded
+        .filter((token) => token.reason === 'allowlist_pending')
+        .map((token) => token.address.toLowerCase());
       scanFromCache = scan.fromCache;
     }
 
@@ -103,6 +110,7 @@ export async function GET(request: Request) {
       {
         tokens,
         forageableAddresses: [...forageableByAddress.keys()],
+        pendingAllowlistAddresses,
         wldBalance:
           wldResult.value.balanceFormatted ||
           wldFromList?.balanceFormatted ||

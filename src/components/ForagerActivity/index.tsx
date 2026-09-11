@@ -117,7 +117,7 @@ export function ForagerActivity({
             {isScan ? (
               <AppLogo size="sm" variant="bare" />
             ) : (
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#2c2c2e] text-forager-accent">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1f1f1f] text-forager-accent">
                 <IosIcon name={icon} size={26} className="forager-activity-icon" />
               </div>
             )}

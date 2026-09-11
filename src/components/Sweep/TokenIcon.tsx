@@ -5,6 +5,7 @@ import {
   tokenIconHue,
 } from '@/lib/token-icons';
 import type { WalletToken } from '@/lib/types';
+import { cn } from '@/lib/utils';
 import { useEffect, useMemo, useState } from 'react';
 
 type TokenIconProps = Pick<WalletToken, 'address' | 'symbol' | 'logoUrl'> & {
@@ -43,7 +44,10 @@ export function TokenIcon({
 
   const dimensionClass =
     size === 'xs' ? 'h-6 w-6' : size === 'sm' ? 'h-8 w-8' : 'h-10 w-10';
-  const frameClass = `relative shrink-0 overflow-hidden rounded-xl border border-forager-border/60 shadow-[0_0_0_1px_rgba(0,0,0,0.2)] ${className}`;
+  const frameClass = cn(
+    'relative shrink-0 overflow-hidden rounded-xl border border-forager-border/60 shadow-[0_0_0_1px_rgba(0,0,0,0.2)]',
+    className,
+  );
   const currentSource = exhausted ? null : sources[sourceIndex];
   const safeSymbol = symbol?.trim() || 'Token';
   const initials = safeSymbol

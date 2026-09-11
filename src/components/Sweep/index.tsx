@@ -1,5 +1,6 @@
 'use client';
 
+import { TokenBadge } from '@/components/TokenBadge';
 import { AnimatedWld } from '@/components/Sweep/AnimatedWld';
 import { ErrorBanner } from '@/components/Sweep/ErrorBanner';
 import { TokenIcon } from '@/components/Sweep/TokenIcon';
@@ -62,7 +63,7 @@ type ExcludedToken = {
 const SCAN_ACTIVITY_MESSAGES = [
   'Checking allowlisted tokens for WLD routes...',
   'Scanning your World Chain wallet...',
-  'Filtering junk tokens with real liquidity...',
+  'Filtering leftover tokens with real liquidity...',
 ];
 
 /**
@@ -250,8 +251,16 @@ export function Sweep() {
     [selectedTokens],
   );
 
-  // Real non-foragable outcomes only — hide protected/staked and anything still
-  // waiting on a quote so users never see "UNKNOWN" / "not quoted" noise.
+  const pendingVerifiedTokens = useMemo(
+    () =>
+      excludedTokens.filter(
+        (token) =>
+          token.reason === 'allowlist_pending' ||
+          token.reason === 'not_allowlisted',
+      ),
+    [excludedTokens],
+  );
+
   const nonForagableTokens = useMemo(
     () =>
       excludedTokens.filter(
@@ -259,7 +268,9 @@ export function Sweep() {
           token.reason !== 'protected' &&
           token.reason !== 'zero_balance' &&
           token.reason !== 'staked_re' &&
-          token.reason !== 'scan_deferred',
+          token.reason !== 'scan_deferred' &&
+          token.reason !== 'allowlist_pending' &&
+          token.reason !== 'not_allowlisted',
       ),
     [excludedTokens],
   );
@@ -1106,16 +1117,20 @@ export function Sweep() {
                 <p className="forager-title text-[17px]">
                   {!walletAddress
                     ? 'Waiting for your wallet'
+                    : pendingVerifiedTokens.length > 0
+                      ? 'Verified tokens are waiting on World App'
                     : nonForagableTokens.length > 0
                       ? 'Nothing forageable right now'
                       : 'Your wallet is clean'}
                 </p>
                 <p className="forager-subtitle mt-3 max-w-[30ch] text-[15px] leading-snug">
                   {!walletAddress
-                    ? 'Sign in inside World App and your junk tokens will load automatically.'
+                    ? 'Sign in inside World App and leftover tokens will load automatically.'
+                    : pendingVerifiedTokens.length > 0
+                      ? 'These tokens have real WLD liquidity. Reopen World App in a minute so Forager can include them.'
                     : nonForagableTokens.length > 0
-                      ? 'These tokens have no usable Uniswap route to WLD, or their sell path is unsafe.'
-                      : 'No junk tokens to forage right now. Check back after trying other mini apps.'}
+                      ? 'No usable Uniswap route to WLD, or the sell path is unsafe.'
+                      : 'No leftover tokens to forage right now. Check back after other mini apps.'}
                 </p>
               </div>
             ) : (
@@ -1152,9 +1167,12 @@ export function Sweep() {
                       logoUrl={token.logoUrl}
                     />
                     <div className="min-w-0 flex-1">
-                      <p className="forager-title truncate text-[17px] leading-tight">
-                        {token.symbol}
-                      </p>
+                      <div className="flex min-w-0 items-center gap-2">
+                        <p className="forager-title truncate text-[17px] leading-tight">
+                          {token.symbol}
+                        </p>
+                        <TokenBadge label="Verified" tone="verified" icon />
+                      </div>
                       <p className="truncate text-[13px] leading-tight text-forager-text-muted">
                         {token.name}
                       </p>
@@ -1180,6 +1198,48 @@ export function Sweep() {
             )}
           </div>
 
+          {pendingVerifiedTokens.length > 0 ? (
+            <div className="forager-section">
+              <div className="flex items-center gap-3 px-1 pb-2">
+                <span className="forager-nonforage-count forager-numeric shrink-0 rounded-full px-2 py-0.5 text-[13px]">
+                  {pendingVerifiedTokens.length}
+                </span>
+                <span className="min-w-0 flex-1 text-[15px] text-forager-text-muted">
+                  Verified · World App syncing
+                </span>
+              </div>
+              <div className="forager-group">
+                {pendingVerifiedTokens.map((token) => (
+                  <div
+                    key={token.address}
+                    className="forager-group-row forager-row-enter flex min-w-0 items-center gap-3 px-4 py-3.5"
+                  >
+                    <TokenIcon
+                      size="sm"
+                      address={token.address}
+                      symbol={token.symbol}
+                      logoUrl={token.logoUrl}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <p className="forager-title truncate text-[17px] leading-tight">
+                          {token.symbol}
+                        </p>
+                        <TokenBadge label="Verified" tone="pending" icon />
+                      </div>
+                      <p className="truncate text-[13px] leading-tight text-forager-text-muted">
+                        Reopen World App to forage
+                      </p>
+                    </div>
+                    <p className="forager-numeric shrink-0 text-[15px] text-forager-text-muted">
+                      {token.balanceFormatted}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
           {nonForagableTokens.length > 0 ? (
             <div className="forager-section">
               <button
@@ -1197,7 +1257,7 @@ export function Sweep() {
                   {nonForagableTokens.length}
                 </span>
                 <span className="min-w-0 flex-1 text-[15px] text-forager-text-muted">
-                  Not forageable
+                  No WLD route
                 </span>
                 <span
                   className={`forager-nonforage-chevron ml-1 shrink-0 transition-transform duration-200 ${
@@ -1246,7 +1306,7 @@ export function Sweep() {
                 <p className="forager-title text-[17px]">Preview</p>
               </div>
               <p className="mt-3 text-[15px] leading-snug text-forager-text-muted">
-                Swapping {plan.quotes.length} junk token
+                Swapping {plan.quotes.length} leftover token
                 {plan.quotes.length === 1 ? '' : 's'}
               </p>
               <div className="mt-4 flex flex-wrap items-baseline gap-x-1.5">

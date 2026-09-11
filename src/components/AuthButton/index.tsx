@@ -2,6 +2,7 @@
 
 import { walletAuth } from '@/auth/wallet';
 import { ForagerButton } from '@/components/ForagerButton';
+import { HoverBorderGradient } from '@/components/ui/hover-border-gradient';
 import { hapticImpact, hapticNotification } from '@/lib/haptics';
 import { LiveFeedback } from '@worldcoin/mini-apps-ui-kit-react';
 import { useMiniKit } from '@worldcoin/minikit-js/minikit-provider';
@@ -66,15 +67,22 @@ export const AuthButton = () => {
         }}
         state={isPending ? 'pending' : undefined}
       >
-        <ForagerButton
-          onClick={() => void runWalletAuth()}
-          disabled={isPending || !isInstalled}
-          size="lg"
-          variant="primary"
-          className="w-full min-w-[220px]"
+        <HoverBorderGradient
+          as="div"
+          duration={1.15}
+          containerClassName="w-full min-w-[220px] rounded-[16px]"
+          className="w-full rounded-[15px] p-0"
         >
-          Sign in with World
-        </ForagerButton>
+          <ForagerButton
+            onClick={() => void runWalletAuth()}
+            disabled={isPending || !isInstalled}
+            size="lg"
+            variant="primary"
+            className="w-full"
+          >
+            Sign in with World
+          </ForagerButton>
+        </HoverBorderGradient>
       </LiveFeedback>
       {!isInstalled ? (
         <p className="max-w-[16rem] text-center text-[13px] leading-snug text-forager-text-muted">

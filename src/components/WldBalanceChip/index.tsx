@@ -1,8 +1,10 @@
 'use client';
 
 import { TokenIcon } from '@/components/Sweep/TokenIcon';
+import { ShineBorder } from '@/components/ui/shine-border';
 import { apiPath } from '@/lib/base-path';
 import { hapticImpact, hapticSelection } from '@/lib/haptics';
+import { cn } from '@/lib/utils';
 import { useLocalFiat, wldAmountToFiat } from '@/lib/use-wld-price';
 import {
   requestWalletRefresh,
@@ -38,16 +40,12 @@ export function WldBalanceChip({ className = '' }: WldBalanceChipProps) {
       return;
     }
 
-    // Soft client cache — avoids /balance right after a scan seeded server WLD.
     try {
       const cacheKey = `forager:wld:${walletAddress.toLowerCase()}`;
       const raw = sessionStorage.getItem(cacheKey);
       if (raw) {
         const parsed = JSON.parse(raw) as { balance: string; at: number };
-        if (
-          parsed.balance != null &&
-          Date.now() - parsed.at < 30_000
-        ) {
+        if (parsed.balance != null && Date.now() - parsed.at < 30_000) {
           setBalance(parsed.balance);
           setLoading(false);
           return;
@@ -94,8 +92,6 @@ export function WldBalanceChip({ className = '' }: WldBalanceChipProps) {
 
   useWalletRefreshListener(
     (detail) => {
-      // Skip chip refetch after soft wallet/scan refreshes — /wallet and
-      // holdings already seed the WLD cache. Force/forage still refresh.
       if (
         !detail.force &&
         detail.reason !== 'forage' &&
@@ -129,25 +125,31 @@ export function WldBalanceChip({ className = '' }: WldBalanceChipProps) {
         requestWalletRefresh({ reason: 'manual', force: true });
         void loadBalance();
       }}
-      className={`forager-balance-chip flex items-center gap-2 rounded-full px-2.5 py-1.5 text-left ${className}`}
+      className={cn('forager-balance-chip', className)}
       aria-label="Refresh WLD balance"
     >
+      <ShineBorder
+        borderWidth={1}
+        duration={10}
+        shineColor={['#ffffff', '#a3a3a3', '#ffffff']}
+      />
       <TokenIcon
         size="xs"
         address="0x2cFc85d8E48F8EAB294be644d9E25C3030863003"
         symbol="WLD"
         logoUrl="https://assets.coingecko.com/coins/images/31069/small/worldcoin.jpeg"
+        className="rounded-full border-white/15 shadow-none"
       />
-      <span className="flex flex-col leading-tight">
-        <span className="forager-numeric text-[13px] font-semibold tabular-nums">
+      <span className="flex min-w-0 items-baseline gap-1 leading-none">
+        <span className="forager-numeric text-[15px] font-semibold tabular-nums">
           {loading && !balance ? '…' : balance ?? '—'}
-          <span className="ml-1 text-[11px] font-medium text-forager-text-muted">
-            WLD
-          </span>
+        </span>
+        <span className="text-[11px] font-medium tracking-wide text-forager-text-muted">
+          WLD
         </span>
         {fiatLabel ? (
-          <span className="forager-numeric text-[11px] text-forager-text-muted">
-            ≈ {fiatLabel}
+          <span className="forager-numeric hidden text-[11px] text-forager-text-faint min-[380px]:inline">
+            · {fiatLabel}
           </span>
         ) : null}
       </span>

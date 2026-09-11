@@ -2,6 +2,8 @@
 
 import { ForagerButton } from '@/components/ForagerButton';
 import { SectionHeader } from '@/components/SectionHeader';
+import { TokenBadge } from '@/components/TokenBadge';
+import { ShineBorder } from '@/components/ui/shine-border';
 import { TokenIcon } from '@/components/Sweep/TokenIcon';
 import { apiPath } from '@/lib/base-path';
 import { shortenAddress } from '@/lib/forage-stats-types';
@@ -27,6 +29,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 type WalletResponse = {
   tokens: WalletToken[];
   forageableAddresses?: string[];
+  pendingAllowlistAddresses?: string[];
   wldBalance: string;
   wldSymbol: string;
   tokenCount: number;
@@ -139,6 +142,16 @@ export function WalletPanel() {
     [data?.forageableAddresses],
   );
 
+  const pendingAllowlistSet = useMemo(
+    () =>
+      new Set(
+        (data?.pendingAllowlistAddresses ?? []).map((address) =>
+          address.toLowerCase(),
+        ),
+      ),
+    [data?.pendingAllowlistAddresses],
+  );
+
   const forageableTokens = useMemo(
     () =>
       data?.tokens.filter((token) =>
@@ -209,7 +222,12 @@ export function WalletPanel() {
 
   return (
     <div className="forager-page-stack">
-      <div className="forager-group px-4 py-5">
+      <div className="forager-group relative overflow-hidden px-4 py-5">
+        <ShineBorder
+          borderWidth={1}
+          duration={12}
+          shineColor={['transparent', '#ffffff', 'transparent']}
+        />
         <p className="forager-section-title">WLD balance</p>
         <p className="forager-numeric mt-2 text-[34px] font-bold tracking-[0.37px]">
           {loadingBalance && !data.wldBalance ? '…' : data.wldBalance}
@@ -221,7 +239,7 @@ export function WalletPanel() {
         <button
           type="button"
           onClick={() => void copyAddress()}
-          className="mt-4 flex w-full items-center justify-between gap-3 rounded-[10px] bg-[#2c2c2e] px-4 py-3 text-left text-[15px]"
+          className="mt-4 flex w-full items-center justify-between gap-3 rounded-full border border-white/10 bg-white/5 px-4 py-3 text-left text-[15px]"
         >
           <span className="truncate forager-numeric text-forager-text-muted">
             {shortenAddress(walletAddress)}
@@ -281,6 +299,9 @@ export function WalletPanel() {
                 key={token.address}
                 token={token}
                 forageable={forageableAddressSet.has(token.address.toLowerCase())}
+                pendingAllowlist={pendingAllowlistSet.has(
+                  token.address.toLowerCase(),
+                )}
                 fiatPrice={fiat.price}
                 formatFiat={fiat.format}
               />
@@ -296,7 +317,7 @@ export function WalletPanel() {
             {data.forageableCount === 1 ? '' : 's'}
           </p>
           <p className="mt-3 text-[15px] leading-snug text-forager-text-muted">
-            Swap junk tokens into WLD from Home.
+            Swap leftover tokens into WLD from Home.
           </p>
           <ForagerButton
             variant="primary"
@@ -314,7 +335,7 @@ export function WalletPanel() {
 
       {forageableTokens.length === 0 && data.tokenCount > 0 ? (
         <p className="text-center text-[13px] text-forager-text-muted">
-          No junk tokens to forage right now.
+          No leftover tokens ready to forage right now.
         </p>
       ) : null}
     </div>
@@ -324,11 +345,13 @@ export function WalletPanel() {
 function TokenRow({
   token,
   forageable,
+  pendingAllowlist,
   fiatPrice,
   formatFiat,
 }: {
   token: WalletToken;
   forageable: boolean;
+  pendingAllowlist: boolean;
   fiatPrice: number | null;
   formatFiat: (value: number) => string;
 }) {
@@ -364,11 +387,13 @@ function TokenRow({
         <div className="flex items-center gap-2">
           <p className="truncate text-[17px] font-semibold">{token.symbol}</p>
           {isWld ? (
-            <span className="text-[13px] text-forager-accent">Native</span>
+            <TokenBadge label="Native" tone="native" />
           ) : forageable ? (
-            <span className="text-[13px] text-forager-accent">Forageable</span>
+            <TokenBadge label="Verified" tone="verified" icon />
+          ) : pendingAllowlist ? (
+            <TokenBadge label="Verified" tone="pending" icon />
           ) : (
-            <span className="text-[13px] text-forager-text-faint">No route</span>
+            <TokenBadge label="No route" tone="muted" />
           )}
         </div>
         <p className="truncate text-[13px] text-forager-text-muted">{token.name}</p>

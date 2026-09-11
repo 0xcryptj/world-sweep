@@ -53,7 +53,7 @@ function InviteInner() {
           setMessage('Continuing to forage…');
         }
       } else if (!session?.user) {
-        setMessage('Sign in to forage junk tokens into WLD.');
+        setMessage('Sign in to forage leftover tokens into WLD.');
         return;
       }
 

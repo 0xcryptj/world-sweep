@@ -3,10 +3,10 @@ import { withBasePath } from './base-path';
 export const APP_NAME = 'Forager';
 
 /** Brand voice — field-ledger, careful notes */
-export const APP_TAGLINE = 'Turn junk World Chain tokens into WLD.';
+export const APP_TAGLINE = 'Turn leftover World Chain tokens into WLD.';
 
 export const APP_DESCRIPTION =
-  'Forager finds leftover junk tokens in your World Chain wallet that still have liquidity, then batches them into one swap back to WLD. You pick what to forage, preview the route and fee, and approve in World App.';
+  'Forager finds leftover World Chain tokens that still have liquidity, then batches them into one swap back to WLD. You pick what to forage, preview the route and fee, and approve in World App.';
 
 /** Store listing copy — apply in Developer Portal after review unlocks edits. */
 export const STORE_LISTING_COPY = {
@@ -21,27 +21,26 @@ export const STORE_LISTING_COPY = {
 export const APP_LOGO_SRC = withBasePath('/assets/pics/forager-logo.png');
 
 /**
- * Forager × World brand tokens — from forager-world-brand.html
- * Green = tool/action · Brass = recovered value (flat, no glow)
+ * World Chain × Promotor Wow — black canvas, white primary, no blue.
  */
 export const FORAGER_COLORS = {
-  ink: '#0b0c0b',
-  ink2: '#131512',
-  ink3: '#191c17',
-  hair: '#2b2f27',
-  hair2: '#3a4034',
-  bone: '#ece7db',
-  boneDim: '#9a9c90',
-  moss: '#6f9070',
-  forager: '#4cee8c',
-  foragerDeep: '#2a8f56',
-  brass: '#c9a24b',
-  brassDim: '#8a7440',
+  ink: '#000000',
+  ink2: '#0f0f0f',
+  ink3: '#1f1f1f',
+  hair: '#2e2e2e',
+  hair2: '#3d3d3d',
+  bone: '#ffffff',
+  boneDim: '#a3a3a3',
+  moss: '#737373',
+  forager: '#ffffff',
+  foragerDeep: '#d4d4d4',
+  brass: '#f5f5f5',
+  brassDim: '#a3a3a3',
 } as const;
 
 export const BRAND_COPY = {
   forageSuccess: "Ledger closed. Value's in your wallet.",
-  foragePending: 'Converting junk tokens · awaiting your sign-off',
+  foragePending: 'Converting leftover tokens · awaiting your sign-off',
   globalReclaimed: 'Total reclaimed',
   worldChain: 'WORLD CHAIN',
   shareCta: 'Share this forage',

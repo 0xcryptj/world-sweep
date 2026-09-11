@@ -1,8 +1,11 @@
 'use client';
 
 import { ForagerHeroMark } from '@/components/ForagerHeroMark';
+import { AnimatedShinyText } from '@/components/ui/animated-shiny-text';
+import { Ripple } from '@/components/ui/ripple';
+import { SparklesText } from '@/components/ui/sparkles-text';
 import { cn } from '@/lib/utils';
-import { APP_NAME } from '@/lib/branding';
+import { APP_NAME, APP_TAGLINE } from '@/lib/branding';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
 import { useRef } from 'react';
@@ -10,7 +13,6 @@ import { useRef } from 'react';
 gsap.registerPlugin(useGSAP);
 
 type PreloaderProps = {
-  /** When true, play the curtain reveal. SplashGate should pass MiniKit + min-hold. */
   ready?: boolean;
   onComplete?: () => void;
   className?: string;
@@ -84,12 +86,24 @@ export function Preloader({
       aria-busy={!ready}
       className={cn('forager-preloader', className)}
     >
+      <div className="forager-saas-grid pointer-events-none absolute inset-0" />
       <div className="forager-splash-vignette" />
       <div ref={stageRef} className="forager-splash-stage">
-        <ForagerHeroMark animated size={220} />
+        <div className="forager-splash-mark">
+          <Ripple mainCircleSize={148} mainCircleOpacity={0.2} numCircles={6} />
+          <ForagerHeroMark animated size={220} />
+        </div>
         <div className="forager-splash-copy">
-          <p className="forager-splash-kicker">World Chain</p>
-          <h1 className="forager-display forager-splash-title">{APP_NAME}</h1>
+          <AnimatedShinyText className="forager-splash-kicker text-white/55">
+            World Chain
+          </AnimatedShinyText>
+          <SparklesText
+            sparklesCount={5}
+            className="forager-display forager-splash-title"
+          >
+            {APP_NAME}
+          </SparklesText>
+          <p className="forager-splash-tagline">{APP_TAGLINE}</p>
         </div>
       </div>
     </div>
