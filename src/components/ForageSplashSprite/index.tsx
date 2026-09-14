@@ -1,8 +1,11 @@
 import {
+  FORAGE_SPRITE_DURATION_MS,
   FORAGE_SPRITE_FRAME_COUNT,
   FORAGE_SPRITE_FRAME_HEIGHT,
   FORAGE_SPRITE_FRAME_WIDTH,
+  FORAGE_SPRITE_GOLD_FRAME,
   FORAGE_SPRITE_SRC,
+  FORAGE_SPRITE_WALK_FRAMES,
 } from '@/lib/forage-sprite';
 import { cn } from '@/lib/utils';
 import type { CSSProperties } from 'react';
@@ -30,11 +33,15 @@ export function ForageSplashSprite({
       style={
         {
           '--forage-n': FORAGE_SPRITE_FRAME_COUNT,
+          '--forage-walk': FORAGE_SPRITE_WALK_FRAMES,
+          '--forage-gold': FORAGE_SPRITE_GOLD_FRAME,
+          '--forage-ms': `${FORAGE_SPRITE_DURATION_MS}ms`,
           '--forage-aspect': `${FORAGE_SPRITE_FRAME_WIDTH} / ${FORAGE_SPRITE_FRAME_HEIGHT}`,
         } as CSSProperties
       }
       aria-hidden
     >
+      {variant === 'hero' ? <span className="forager-forage-rays" /> : null}
       <span className="forager-forage-frame">
         <span
           className="forager-forage-sheet"

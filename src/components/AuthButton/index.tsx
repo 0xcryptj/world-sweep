@@ -4,6 +4,7 @@ import { walletAuth } from '@/auth/wallet';
 import { ForagerButton } from '@/components/ForagerButton';
 import { WorldMark } from '@/components/WorldMark';
 import { hapticImpact, hapticNotification } from '@/lib/haptics';
+import { markSignedInBefore } from '@/lib/signin-welcome';
 import { LiveFeedback } from '@worldcoin/mini-apps-ui-kit-react';
 import { MiniKit } from '@worldcoin/minikit-js';
 import { useMiniKit } from '@worldcoin/minikit-js/minikit-provider';
@@ -21,6 +22,7 @@ export const AuthButton = () => {
 
   useEffect(() => {
     if (status === 'authenticated') {
+      markSignedInBefore();
       router.replace('/home');
     }
   }, [router, status]);
@@ -34,6 +36,7 @@ export const AuthButton = () => {
     setIsPending(true);
     try {
       await walletAuth();
+      markSignedInBefore();
       void hapticNotification('success');
       router.replace('/home');
     } catch (error) {
@@ -78,7 +81,7 @@ export const AuthButton = () => {
           className="w-full min-w-[220px]"
         >
           <span className="inline-flex items-center justify-center gap-2">
-            <WorldMark size={18} />
+            <WorldMark size={18} className="text-black" />
             Sign in with World
           </span>
         </ForagerButton>

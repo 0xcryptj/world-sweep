@@ -176,11 +176,21 @@ async function quoteTokenLiquidity(
   route: RouteQuote | null;
   reason: LiquidityExclusionReason | null;
 }> {
-  // Always try direct + WETH/USDC bridges — liquid junk often has no direct WLD pool.
+  // Pending-allowlist never enters the forage quoter — same path as build-sweep.
+  if (!isPermit2Allowlisted(token.address)) {
+    const looksVerified =
+      knownLiquidSet.has(token.address.toLowerCase()) ||
+      (typeof token.priceUsd === 'number' && token.priceUsd > 0) ||
+      Boolean(token.logoUrl);
+    return {
+      route: null,
+      reason: looksVerified ? 'allowlist_pending' : 'not_allowlisted',
+    };
+  }
+
+  // One quote path with scan + preview + build: cache-first, single in-flight.
   const route = await quoteRouteToWld(token, {
     skipRetry: mode === 'fast',
-    firstSuccess: mode === 'fast',
-    directOnly: mode === 'fast',
   });
   if (!route) {
     return { route: null, reason: 'no_liquidity' };
@@ -189,15 +199,6 @@ async function quoteTokenLiquidity(
   const minWldOut = applySlippage(route.amountOut, SLIPPAGE_BPS);
   if (minWldOut < MIN_WLD_OUT_WEI) {
     return { route: null, reason: 'output_too_small' };
-  }
-
-  if (!isPermit2Allowlisted(token.address)) {
-    console.info(
-      `[forage-scan] liquid but portal allowlist pending: ${token.symbol} ${token.address}`,
-    );
-    // Surface as excluded so the UI never auto-selects tokens that build-sweep
-    // will soft-skip — that left the button stuck on "Select forageable tokens".
-    return { route, reason: 'allowlist_pending' };
   }
 
   return { route, reason: null };

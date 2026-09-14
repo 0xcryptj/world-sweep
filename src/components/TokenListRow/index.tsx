@@ -18,6 +18,8 @@ export type TokenListRowData = {
   logoUrl?: string | null;
   priceUsd?: number | null;
   priceChange24h?: number | null;
+  cachedRoute?: { amountOut?: string } | null;
+  quoteWldWei?: string | null;
 };
 
 type TokenListRowProps = {
@@ -30,6 +32,7 @@ type TokenListRowProps = {
   accessory?: ReactNode;
   className?: string;
   style?: CSSProperties;
+  wldUsd?: number | null;
 };
 
 export function TokenListRow({
@@ -42,8 +45,9 @@ export function TokenListRow({
   accessory,
   className,
   style,
+  wldUsd,
 }: TokenListRowProps) {
-  const usd = formatTokenUsd(tokenUsdValue(token));
+  const usd = formatTokenUsd(tokenUsdValue(token, wldUsd));
   const change = formatPctChange(token.priceChange24h);
   const changeTone =
     token.priceChange24h == null
@@ -54,6 +58,13 @@ export function TokenListRow({
 
   const content = (
     <>
+      {onToggle && !disabled ? (
+        <span
+          className="forager-token-check"
+          data-checked={selected ? 'true' : 'false'}
+          aria-hidden
+        />
+      ) : null}
       <TokenIcon
         size="md"
         address={token.address}
@@ -87,9 +98,11 @@ export function TokenListRow({
       <button
         type="button"
         onClick={onToggle}
+        aria-pressed={selected}
+        aria-label={`${selected ? 'Deselect' : 'Select'} ${token.symbol} to forage into WLD`}
         className={cn(
-          'forager-wallet-row forager-row-enter',
-          selected && 'forager-wallet-row-selected',
+          'forager-wallet-row forager-token-row forager-row-enter',
+          selected && 'forager-wallet-row-selected forager-token-row-selected',
           className,
         )}
         style={style}

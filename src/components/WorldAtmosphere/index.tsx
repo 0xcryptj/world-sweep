@@ -1,6 +1,5 @@
 'use client';
 
-import { FlickeringGrid } from '@/components/ui/flickering-grid';
 import { usePathname } from 'next/navigation';
 
 export function WorldAtmosphere() {
@@ -11,12 +10,10 @@ export function WorldAtmosphere() {
 
   return (
     <div
-      className="world-atmosphere pointer-events-none fixed inset-0 z-0 overflow-hidden"
+      className="world-atmosphere pointer-events-none fixed inset-0 z-0 overflow-hidden bg-black"
       aria-hidden
     >
       <div className="world-atmosphere__gradient absolute inset-0" />
-      <FlickeringGrid className="absolute inset-0" />
-      <div className="world-atmosphere__veil absolute inset-0" />
     </div>
   );
 }

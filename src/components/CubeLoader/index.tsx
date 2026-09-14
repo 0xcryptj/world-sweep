@@ -2,12 +2,12 @@ import { cn } from '@/lib/utils';
 
 type CubeLoaderProps = {
   className?: string;
-  size?: 'sm' | 'md';
+  size?: 'xs' | 'sm' | 'md';
 };
 
 /**
  * CSS 3D transmitting-modules cube (CodeSandbox loader motion).
- * Scan / balance only — no Three.js, no GLTF, no Environment scene.
+ * Scan / quote / balance only — no Three.js, no GLTF, no Environment scene.
  */
 export function CubeLoader({ className, size = 'md' }: CubeLoaderProps) {
   return (
@@ -15,6 +15,7 @@ export function CubeLoader({ className, size = 'md' }: CubeLoaderProps) {
       className={cn(
         'forager-cube-loader',
         size === 'sm' ? 'forager-cube-loader-sm' : null,
+        size === 'xs' ? 'forager-cube-loader-xs' : null,
         className,
       )}
       aria-hidden

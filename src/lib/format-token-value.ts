@@ -1,20 +1,45 @@
+import { formatUnits } from 'viem';
 import type { WalletToken } from './types';
 
-export function tokenUsdValue(token: {
-  balanceFormatted: string;
-  priceUsd?: number | null;
-}): number | null {
-  if (token.priceUsd == null || !Number.isFinite(token.priceUsd) || token.priceUsd <= 0) {
+function quoteWldToUsd(
+  amountOutWei: string | null | undefined,
+  wldUsd?: number | null,
+): number | null {
+  if (!amountOutWei || wldUsd == null || !Number.isFinite(wldUsd) || wldUsd <= 0) {
     return null;
   }
-  const qty = Number(String(token.balanceFormatted).replace(/,/g, ''));
-  if (!Number.isFinite(qty) || qty <= 0) {
+  try {
+    const value = Number(formatUnits(BigInt(amountOutWei), 18)) * wldUsd;
+    return Number.isFinite(value) && value > 0 ? value : null;
+  } catch {
     return null;
   }
-  const value = token.priceUsd * qty;
-  return Number.isFinite(value) ? value : null;
 }
 
+export function tokenUsdValue(
+  token: {
+    balanceFormatted: string;
+    priceUsd?: number | null;
+    cachedRoute?: { amountOut?: string } | null;
+    quoteWldWei?: string | null;
+  },
+  wldUsd?: number | null,
+): number | null {
+  if (token.priceUsd != null && Number.isFinite(token.priceUsd) && token.priceUsd > 0) {
+    const qty = Number(String(token.balanceFormatted).replace(/,/g, ''));
+    if (Number.isFinite(qty) && qty > 0) {
+      const value = token.priceUsd * qty;
+      if (Number.isFinite(value) && value > 0) {
+        return value;
+      }
+    }
+  }
+
+  return quoteWldToUsd(
+    token.quoteWldWei ?? token.cachedRoute?.amountOut,
+    wldUsd,
+  );
+}
 export function formatTokenUsd(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value) || value <= 0) {
     return '';
@@ -36,6 +61,9 @@ export function formatPctChange(value: number | null | undefined): string {
   return `${sign}${value.toFixed(2)}%`;
 }
 
-export function tokenMarketUsd(token: Pick<WalletToken, 'balanceFormatted' | 'priceUsd'>) {
-  return formatTokenUsd(tokenUsdValue(token));
+export function tokenMarketUsd(
+  token: Pick<WalletToken, 'balanceFormatted' | 'priceUsd' | 'cachedRoute'>,
+  wldUsd?: number | null,
+) {
+  return formatTokenUsd(tokenUsdValue(token, wldUsd));
 }

@@ -116,9 +116,13 @@ export function ForagerActivity({
             {title}
           </p>
 
-          {isScan ? (
+          {isScan && title === 'Scanning wallet' ? (
             <p className="forager-subtitle max-w-[26ch] px-1 text-[12px] leading-relaxed">
               First-time scans usually take a few seconds
+            </p>
+          ) : isScan && (title === 'Building preview' || title === 'Quoting tokens') ? (
+            <p className="forager-subtitle max-w-[26ch] px-1 text-[12px] leading-relaxed">
+              Checking routes and locking your WLD estimate
             </p>
           ) : null}
 
