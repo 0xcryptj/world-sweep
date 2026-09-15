@@ -1,42 +1,24 @@
 import { formatUnitsCapped } from './format-balance';
 import {
-  createPublicClient,
   getAddress,
-  http,
   isAddress,
   type Address,
 } from 'viem';
-import { worldchain } from 'viem/chains';
 import { erc20Abi } from './abis';
 import { PORTAL_PERMIT2_TOKEN_ADDRESSES } from './allowlist';
 import { mapPool } from './async-pool';
-import { PROTECTED_TOKEN_ADDRESSES, RPC_URL, WLD_ADDRESS } from './constants';
+import { PROTECTED_TOKEN_ADDRESSES, WLD_ADDRESS } from './constants';
 import { cacheGetOrLoad } from './data-cache';
+import { createWorldChainPublicClient } from './rpc';
 import { isForageableToken } from './token-filters';
 import type { WalletToken } from './types';
 
 /**
- * Server-side RPC URL. Built from the non-public ALCHEMY_API_KEY so the keyed
- * Alchemy endpoint never ships in a client bundle. On the client, ALCHEMY_API_KEY
- * is undefined, so this falls back to the keyless public RPC_URL — but this
- * client is only ever exercised in server code (API routes / sweep building).
+ * Server-side World Chain client. Prefers keyed Alchemy, then QuickNode /
+ * Tenderly env URLs, then public Alchemy + Tenderly so Uniswap quotes still
+ * work when Alchemy 429s.
  */
-const SERVER_RPC_URL = process.env.ALCHEMY_API_KEY
-  ? `https://worldchain-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`
-  : RPC_URL;
-
-const client = createPublicClient({
-  chain: worldchain,
-  // `batch` collapses many eth_calls into a single JSON-RPC request and
-  // `retryCount` adds viem's own 429/5xx backoff — both cut the request volume
-  // that triggers Alchemy free-tier rate limiting.
-  transport: http(SERVER_RPC_URL, {
-    batch: true,
-    retryCount: 2,
-    retryDelay: 250,
-    timeout: 8_000,
-  }),
-});
+const client = createWorldChainPublicClient({ server: true });
 
 type AlchemyTokenBalance = {
   contractAddress: string;
@@ -146,24 +128,60 @@ async function alchemyRpc<T>(method: string, params: unknown[]): Promise<T> {
 }
 
 /**
- * Reads specific token balances in one batched Alchemy call (no per-token
- * eth_call fan-out, no viem error string that would embed the keyed RPC URL).
+ * Reads specific token balances. Prefers one Alchemy batch; if Alchemy is down
+ * or rate-limited, falls back to ERC-20 balanceOf over the RPC failover list.
  */
 export async function fetchTokenBalancesWei(
   walletAddress: Address,
   tokenAddresses: readonly string[],
 ): Promise<Map<string, bigint>> {
-  const result = await alchemyRpc<{ tokenBalances: AlchemyTokenBalance[] }>(
-    'alchemy_getTokenBalances',
-    [walletAddress, tokenAddresses],
-  );
+  const addresses = tokenAddresses.filter((address) => isAddress(address));
+  if (addresses.length === 0) {
+    return new Map();
+  }
+
+  try {
+    const result = await alchemyRpc<{ tokenBalances: AlchemyTokenBalance[] }>(
+      'alchemy_getTokenBalances',
+      [walletAddress, addresses],
+    );
+
+    const balances = new Map<string, bigint>();
+    for (const entry of result.tokenBalances ?? []) {
+      balances.set(
+        entry.contractAddress.toLowerCase(),
+        BigInt(entry.tokenBalance || '0x0'),
+      );
+    }
+    return balances;
+  } catch {
+    return fetchTokenBalancesViaRpc(walletAddress, addresses);
+  }
+}
+
+async function fetchTokenBalancesViaRpc(
+  walletAddress: Address,
+  tokenAddresses: readonly string[],
+): Promise<Map<string, bigint>> {
+  const results = await client.multicall({
+    contracts: tokenAddresses.map((tokenAddress) => ({
+      address: getAddress(tokenAddress),
+      abi: erc20Abi,
+      functionName: 'balanceOf' as const,
+      args: [walletAddress],
+    })),
+    allowFailure: true,
+  });
 
   const balances = new Map<string, bigint>();
-  for (const entry of result.tokenBalances ?? []) {
-    balances.set(
-      entry.contractAddress.toLowerCase(),
-      BigInt(entry.tokenBalance || '0x0'),
-    );
+  for (let index = 0; index < tokenAddresses.length; index++) {
+    const result = results[index];
+    const address = tokenAddresses[index].toLowerCase();
+    if (result.status === 'success' && typeof result.result === 'bigint') {
+      balances.set(address, result.result);
+    } else {
+      balances.set(address, BigInt(0));
+    }
   }
   return balances;
 }
@@ -510,15 +528,10 @@ export async function fetchAllWalletTokens(
       })
       .filter((token) => token.balance !== '0');
   } catch (error) {
-    const isRateLimited =
-      error instanceof Error &&
-      'isRateLimited' in error &&
-      Boolean((error as Error & { isRateLimited?: boolean }).isRateLimited);
-
-    if (!isRateLimited) {
-      throw error;
-    }
-
+    console.warn(
+      '[tokens] Alchemy token discovery failed; quoting allowlisted holdings via RPC failover',
+      error instanceof Error ? error.message : error,
+    );
     tokens = await fetchAllowlistedWalletTokens(normalizedWallet);
   }
 

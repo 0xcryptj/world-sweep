@@ -27,9 +27,13 @@ function loadEnvValue(name) {
 }
 
 const apiKey = process.env.ALCHEMY_API_KEY ?? loadEnvValue('ALCHEMY_API_KEY');
-const RPC = apiKey
-  ? `https://worldchain-mainnet.g.alchemy.com/v2/${apiKey}`
-  : 'https://worldchain-mainnet.g.alchemy.com/public';
+const RPC =
+  apiKey
+    ? `https://worldchain-mainnet.g.alchemy.com/v2/${apiKey}`
+    : process.env.NEXT_PUBLIC_WORLDCHAIN_RPC_URL ??
+      loadEnvValue('NEXT_PUBLIC_WORLDCHAIN_RPC_URL') ??
+      loadEnvValue('WORLDCHAIN_TENDERLY_RPC_URL') ??
+      'https://worldchain-mainnet.gateway.tenderly.co';
 
 const WLD = '0x2cFc85d8E48F8EAB294be644d9E25C3030863003';
 

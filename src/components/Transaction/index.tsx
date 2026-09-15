@@ -4,9 +4,9 @@ import TestContractABI from '@/abi/TestContract.json';
 import { Button, LiveFeedback } from '@worldcoin/mini-apps-ui-kit-react';
 import { MiniKit } from '@worldcoin/minikit-js';
 import { useWaitForUserOperationReceipt } from '@worldcoin/minikit-react';
-import { useEffect, useState } from 'react';
-import { createPublicClient, encodeFunctionData, http } from 'viem';
-import { worldchain } from 'viem/chains';
+import { useEffect, useMemo, useState } from 'react';
+import { encodeFunctionData } from 'viem';
+import { createWorldChainPublicClient } from '@/lib/rpc';
 
 /**
  * This component is used to get a token from a contract
@@ -29,10 +29,7 @@ export const Transaction = () => {
   const [userOpHash, setUserOpHash] = useState('');
 
   // Feel free to use your own RPC provider for better performance
-  const client = createPublicClient({
-    chain: worldchain,
-    transport: http('https://worldchain-mainnet.g.alchemy.com/public'),
-  });
+  const client = useMemo(() => createWorldChainPublicClient(), []);
 
   const { isLoading, isSuccess, isError } = useWaitForUserOperationReceipt({
     client,

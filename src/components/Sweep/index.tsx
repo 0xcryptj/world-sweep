@@ -25,6 +25,7 @@ import { FetchTimeoutError, fetchWithTimeout } from '@/lib/fetch-with-timeout';
 import { hapticImpact, hapticNotification, hapticSelection } from '@/lib/haptics';
 import { BRAND_COPY } from '@/lib/branding';
 import { apiPath } from '@/lib/base-path';
+import { createWorldChainPublicClient } from '@/lib/rpc';
 import {
   readClientScanCache,
   writeClientScanCache,
@@ -44,10 +45,7 @@ import { useMiniKit } from '@worldcoin/minikit-js/minikit-provider';
 import { useUserOperationReceipt } from '@worldcoin/minikit-react';
 import { useSession } from 'next-auth/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { createPublicClient, http } from 'viem';
-import { worldchain } from 'viem/chains';
 import {
-  RPC_URL,
   WORLD_CHAIN_ID,
   MAX_TOKENS_PER_SWEEP,
   MAX_TOKENS_PER_CLEANUP,
@@ -225,14 +223,7 @@ export function Sweep() {
   const walletAddress =
     session?.user?.walletAddress ?? MiniKit.user?.walletAddress ?? '';
 
-  const client = useMemo(
-    () =>
-      createPublicClient({
-        chain: worldchain,
-        transport: http(RPC_URL),
-      }),
-    [],
-  );
+  const client = useMemo(() => createWorldChainPublicClient(), []);
 
   const { poll } = useUserOperationReceipt({
     client,

@@ -2,9 +2,9 @@ export const WORLD_CHAIN_ID = 480;
 
 /**
  * Client-safe World Chain RPC. MUST stay keyless — this value is inlined into
- * client bundles (it is referenced by client components for userOp receipt
- * polling). Never put an API-keyed Alchemy URL in NEXT_PUBLIC_WORLDCHAIN_RPC_URL;
- * server code builds its own keyed endpoint from ALCHEMY_API_KEY (see tokens.ts).
+ * client bundles (userOp receipt polling). Never put a keyed Alchemy / QuickNode
+ * / Tenderly URL in NEXT_PUBLIC_WORLDCHAIN_RPC_URL.
+ * Quotes and scans use a fallback list (Alchemy → Tenderly → others) in rpc.ts.
  */
 export const RPC_URL =
   process.env.NEXT_PUBLIC_WORLDCHAIN_RPC_URL ??

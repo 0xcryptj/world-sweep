@@ -1940,22 +1940,47 @@ vercel-live-feedback,
   display: block;
   width: 100%;
   filter:
-    drop-shadow(0 12px 10px rgb(0 0 0 / 0.92))
-    drop-shadow(0 26px 22px rgb(0 0 0 / 0.8))
-    drop-shadow(0 48px 56px rgb(0 0 0 / 0.7));
+    drop-shadow(0 10px 4px rgb(0 0 0 / 1))
+    drop-shadow(0 22px 12px rgb(0 0 0 / 1))
+    drop-shadow(0 44px 28px rgb(0 0 0 / 0.96))
+    drop-shadow(0 80px 56px rgb(0 0 0 / 0.88))
+    drop-shadow(0 120px 90px rgb(0 0 0 / 0.7));
 }
 
+.forager-forage-sprite-hero .forager-forage-shadow::before,
 .forager-forage-sprite-hero .forager-forage-shadow::after {
   content: '';
   position: absolute;
-  left: 18%;
-  right: 18%;
-  bottom: 5%;
-  height: 20%;
-  border-radius: 50%;
-  background: radial-gradient(ellipse at center, rgb(0 0 0 / 0.95), rgb(0 0 0 / 0.45) 55%, transparent 74%);
   pointer-events: none;
   z-index: 0;
+  border-radius: 50%;
+}
+
+.forager-forage-sprite-hero .forager-forage-shadow::before {
+  left: 6%;
+  right: 6%;
+  bottom: -4%;
+  height: 38%;
+  background: radial-gradient(
+    ellipse at center,
+    rgb(0 0 0 / 1) 0%,
+    rgb(0 0 0 / 0.82) 38%,
+    rgb(0 0 0 / 0.4) 62%,
+    transparent 78%
+  );
+}
+
+.forager-forage-sprite-hero .forager-forage-shadow::after {
+  left: 18%;
+  right: 18%;
+  bottom: 2%;
+  height: 22%;
+  background: radial-gradient(
+    ellipse at center,
+    rgb(0 0 0 / 1),
+    rgb(0 0 0 / 0.55) 50%,
+    transparent 74%
+  );
 }
 
 .forager-forage-sprite-hero .forager-forage-frame {

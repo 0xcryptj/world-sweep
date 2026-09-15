@@ -28,16 +28,18 @@ function loadEnvValue(name) {
 }
 
 function loadEnvRpc() {
-  // Prefer the keyed Alchemy endpoint (higher rate limits, supports
-  // alchemy_simulateExecutionBundle) built from the server-side key.
   const apiKey = process.env.ALCHEMY_API_KEY ?? loadEnvValue('ALCHEMY_API_KEY');
   if (apiKey) {
     return `https://worldchain-mainnet.g.alchemy.com/v2/${apiKey}`;
   }
   return (
+    process.env.WORLDCHAIN_QUICKNODE_URL ??
+    loadEnvValue('WORLDCHAIN_QUICKNODE_URL') ??
+    process.env.WORLDCHAIN_TENDERLY_RPC_URL ??
+    loadEnvValue('WORLDCHAIN_TENDERLY_RPC_URL') ??
     process.env.NEXT_PUBLIC_WORLDCHAIN_RPC_URL ??
     loadEnvValue('NEXT_PUBLIC_WORLDCHAIN_RPC_URL') ??
-    'https://worldchain-mainnet.g.alchemy.com/public'
+    'https://worldchain-mainnet.gateway.tenderly.co'
   );
 }
 

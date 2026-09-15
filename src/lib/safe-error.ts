@@ -44,7 +44,7 @@ export function isRateLimitError(error: unknown): boolean {
 export function containsSensitiveDetails(message: string): boolean {
   return (
     /https?:\/\//i.test(message) ||
-    /g\.alchemy\.com/i.test(message) ||
+    /g\.alchemy\.com|tenderly\.co|drpc\.org|quicknode|routeme\.sh|rpc\.thirdweb/i.test(message) ||
     /\/v2\//.test(message) ||
     /viem@|Contract Call|Raw Call Arguments|Request body|Request Arguments|eth_call|jsonrpc/i.test(
       message,
