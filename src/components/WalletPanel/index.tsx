@@ -1,6 +1,5 @@
 'use client';
 
-import { CubeLoader } from '@/components/CubeLoader';
 import { ForagerButton } from '@/components/ForagerButton';
 import { SectionHeader } from '@/components/SectionHeader';
 import { ShineBorder } from '@/components/ui/shine-border';
@@ -183,10 +182,7 @@ export function WalletPanel() {
 
   if (loading && !data) {
     return (
-      <div className="flex flex-col items-center gap-4 py-8">
-        <CubeLoader />
-        <p className="forager-subtitle text-[15px]">Loading wallet...</p>
-      </div>
+      <p className="forager-subtitle py-8 text-[15px]">Loading wallet...</p>
     );
   }
 

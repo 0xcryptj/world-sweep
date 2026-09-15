@@ -1707,10 +1707,10 @@ vercel-live-feedback,
   height: 100dvh;
   max-width: none;
   max-height: none;
-  z-index: 0;
+  z-index: 1;
   overflow: hidden;
   pointer-events: none;
-  opacity: 0.34;
+  opacity: 0.48;
   mix-blend-mode: screen;
   /* Rim fade only — art still reaches all four edges; fade blends, does not shrink. */
   -webkit-mask-image:
@@ -1900,13 +1900,15 @@ vercel-live-feedback,
 
 .forager-forage-sheet {
   position: absolute;
-  inset: 0;
-  background-repeat: no-repeat;
-  background-position: 0 0;
-  background-size: calc(var(--forage-n, 17) * 100%) 100%;
-  animation: forage-play var(--forage-ms, 4.8s) infinite;
-  animation-timing-function: steps(1, end);
+  top: 0;
+  left: 0;
+  display: block;
+  height: 100%;
+  width: auto;
+  max-width: none;
+  animation: forage-play var(--forage-ms, 4.8s) steps(16, end) infinite;
   image-rendering: pixelated;
+  will-change: transform;
 }
 
 .forager-forage-veil {
@@ -1925,7 +1927,7 @@ vercel-live-feedback,
 }
 
 .forager-forage-sprite-hero .forager-forage-frame {
-  overflow: visible;
+  overflow: hidden;
   background: transparent;
   -webkit-mask-image: none;
   mask-image: none;
@@ -2025,37 +2027,12 @@ vercel-live-feedback,
 }
 
 @keyframes forage-play {
-  0% {
-    background-position: 0 0;
+  from {
+    transform: translateX(0);
   }
 
-  8% {
-    background-position: -100% 0;
-  }
-
-  16% {
-    background-position: -200% 0;
-  }
-
-  24% {
-    background-position: -300% 0;
-  }
-
-  32% {
-    background-position: -400% 0;
-  }
-
-  40% {
-    background-position: -500% 0;
-  }
-
-  48% {
-    background-position: -600% 0;
-  }
-
-  56%,
-  100% {
-    background-position: -700% 0;
+  to {
+    transform: translateX(calc((1 - var(--forage-n, 17)) / var(--forage-n, 17) * 100%));
   }
 }
 
@@ -2246,7 +2223,8 @@ vercel-live-feedback,
   }
 
   .forager-forage-sheet {
-    background-position: -700% 0;
+    animation: none;
+    transform: none;
   }
 
   .forager-forage-rays {
@@ -2259,7 +2237,7 @@ vercel-live-feedback,
   }
 
   .forager-enter-ascii {
-    display: none;
+    opacity: 0.28;
   }
 }
 

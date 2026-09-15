@@ -43,7 +43,13 @@ export function Preloader({
       };
 
       if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-        finish();
+        gsap.to(loader, {
+          opacity: 0,
+          duration: 0.4,
+          delay: 1.8,
+          ease: 'power2.out',
+          onComplete: finish,
+        });
         return;
       }
 

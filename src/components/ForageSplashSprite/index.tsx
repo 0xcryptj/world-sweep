@@ -42,11 +42,13 @@ export function ForageSplashSprite({
       aria-hidden
     >
       <span className="forager-forage-frame">
-        <span
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
           className="forager-forage-sheet"
-          style={{ backgroundImage: `url('${FORAGE_SPRITE_SRC}')` }}
+          src={FORAGE_SPRITE_SRC}
+          alt=""
+          draggable={false}
         />
-        <span className="forager-forage-veil" />
       </span>
     </div>
   );

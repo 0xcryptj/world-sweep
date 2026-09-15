@@ -60,31 +60,13 @@ type ExcludedToken = {
   reasonLabel: string;
 };
 
-const SCAN_ACTIVITY_MESSAGES = [
-  'Please wait — scanning leftover tokens…',
-  'Checking WLD routes for your bag…',
-  'Building a bundled forage transaction…',
-];
+const SCAN_MIN_HOLD_MS = 280;
+const SCAN_COMPLETE_SETTLE_MS = 120;
 
 const PREVIEW_ACTIVITY_MESSAGES = [
   'Please wait — quoting selected tokens…',
   'Building a bundled transaction to WLD…',
   'Locking routes and estimated output…',
-];
-
-/**
- * Characteristic time for the scan asymptote (fast early motion, then creep).
- * Progress keeps advancing until data is ready, then settles. Min hold only
- * avoids a flash dismiss on instant responses.
- */
-const SCAN_PROGRESS_MS = 1_400;
-const SCAN_MIN_HOLD_MS = 280;
-const SCAN_COMPLETE_SETTLE_MS = 120;
-
-const BUILD_ACTIVITY_MESSAGES = [
-  'Please wait — packing approvals and swaps…',
-  'Encoding the bundled forage transaction…',
-  'Calculating minimum WLD output…',
 ];
 
 const SIMULATE_ACTIVITY_MESSAGES = [
@@ -196,7 +178,6 @@ export function Sweep() {
   const previewRetryRef = useRef<Record<string, number>>({});
   const [isQuoting, setIsQuoting] = useState(false);
   const [hasScanned, setHasScanned] = useState(false);
-  const [scanUiComplete, setScanUiComplete] = useState(false);
   const [skipNotice, setSkipNotice] = useState<SkipNotice | null>(null);
   const [showExcluded, setShowExcluded] = useState(false);
   const [submitPhase, setSubmitPhase] = useState<SubmitPhase>('idle');
@@ -282,17 +263,6 @@ export function Sweep() {
   const isScanning = state === 'loading-tokens';
 
   const activityOverlay = useMemo(() => {
-    if (isScanning || (!hasScanned && Boolean(walletAddress))) {
-      return {
-        title: 'Scanning wallet',
-        messages: SCAN_ACTIVITY_MESSAGES,
-        icon: 'coin' as const,
-        durationMs: SCAN_PROGRESS_MS,
-        variant: 'scan' as const,
-        complete: scanUiComplete,
-      };
-    }
-
     if (isQuoting) {
       return {
         title: 'Building preview',
@@ -301,17 +271,7 @@ export function Sweep() {
         durationMs: 6_400,
         variant: 'scan' as const,
         complete: false,
-      };
-    }
-
-    if (submitPhase === 'building') {
-      return {
-        title: 'Preparing forage',
-        messages: BUILD_ACTIVITY_MESSAGES,
-        icon: 'swap' as const,
-        durationMs: 8_000,
-        variant: 'scan' as const,
-        complete: false,
+        showCube: true,
       };
     }
 
@@ -323,19 +283,12 @@ export function Sweep() {
         durationMs: 40_000,
         variant: 'default' as const,
         complete: false,
+        showCube: false,
       };
     }
 
     return null;
-  }, [
-    hasScanned,
-    isQuoting,
-    isScanning,
-    scanUiComplete,
-    submitPhase,
-    txActivityMessages,
-    walletAddress,
-  ]);
+  }, [isQuoting, submitPhase, txActivityMessages]);
 
   const loadTokens = useCallback(async (forceRefresh = false) => {
     if (!walletAddress) {
@@ -346,7 +299,6 @@ export function Sweep() {
     const requestId = previewRequestRef.current;
     const scanStartedAt = Date.now();
     setIsQuoting(false);
-    setScanUiComplete(false);
     setError(null);
     setSkipNotice(null);
     setPlan(null);
@@ -420,7 +372,6 @@ export function Sweep() {
         },
         { persist: false },
       );
-      setScanUiComplete(true);
       if (forceRefresh) {
         // Soft refresh indicator without the full-screen scan wall.
         setState('ready');
@@ -472,7 +423,6 @@ export function Sweep() {
         if (requestId !== previewRequestRef.current) {
           return;
         }
-        setScanUiComplete(true);
         await sleep(SCAN_COMPLETE_SETTLE_MS);
         if (requestId !== previewRequestRef.current) {
           return;
@@ -519,7 +469,6 @@ export function Sweep() {
       if (cached) {
         setState('ready');
         setHasScanned(true);
-        setScanUiComplete(true);
         return;
       }
       const message =
@@ -1136,6 +1085,7 @@ export function Sweep() {
               durationMs={activityOverlay.durationMs}
               variant={activityOverlay.variant}
               complete={activityOverlay.complete}
+              showCube={activityOverlay.showCube}
             />
           ) : null}
 

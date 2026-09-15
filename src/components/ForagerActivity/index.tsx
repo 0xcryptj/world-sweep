@@ -14,6 +14,7 @@ type ForagerActivityProps = {
   durationMs?: number;
   variant?: 'scan' | 'default';
   complete?: boolean;
+  showCube?: boolean;
 };
 
 export function ForagerActivity({
@@ -23,6 +24,7 @@ export function ForagerActivity({
   durationMs = 12_000,
   variant = 'default',
   complete = false,
+  showCube = true,
 }: ForagerActivityProps) {
   const [timedProgress, setTimedProgress] = useState(0);
   const progressRef = useRef(0);
@@ -107,9 +109,11 @@ export function ForagerActivity({
       <div
         className={`forager-activity-card ${isScan ? 'forager-activity-card-scan' : ''}`}
       >
-        <div className="forager-activity-stage">
-          <CubeLoader size={isScan ? 'md' : 'sm'} />
-        </div>
+        {showCube ? (
+          <div className="forager-activity-stage">
+            <CubeLoader size={isScan ? 'md' : 'sm'} />
+          </div>
+        ) : null}
 
         <div className="forager-activity-copy">
           <p className="forager-title text-[16px] leading-snug tracking-[-0.015em]">

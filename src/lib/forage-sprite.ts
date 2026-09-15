@@ -1,6 +1,6 @@
 import { withBasePath } from './base-path';
 
-/** Horizontal strip: bush walk / forage, then a gold-hold (no bush). */
+/** Keyed pixel strip for splash (walk / forage / gold, no grass box). */
 export const FORAGE_SPRITE_SRC = withBasePath(
   '/assets/pics/forager-forage-strip.png',
 );
