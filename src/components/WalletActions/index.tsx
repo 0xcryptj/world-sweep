@@ -44,11 +44,13 @@ export function WalletActions({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [sendToken, setSendToken] = useState(WLD_ADDRESS);
+  const [sendToken, setSendToken] = useState<string>(WLD_ADDRESS);
   const [sendAmount, setSendAmount] = useState('');
   const [sendTo, setSendTo] = useState('');
 
-  const [swapToken, setSwapToken] = useState(forageableTokens[0]?.address ?? '');
+  const [swapToken, setSwapToken] = useState<string>(
+    forageableTokens[0]?.address ?? '',
+  );
   const [swapPlan, setSwapPlan] = useState<BuildSweepResponse | null>(null);
 
   const sendChoices = useMemo(() => {
