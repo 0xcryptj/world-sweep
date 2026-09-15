@@ -1939,12 +1939,7 @@ vercel-live-feedback,
   position: relative;
   display: block;
   width: 100%;
-  filter:
-    drop-shadow(0 10px 4px rgb(0 0 0 / 1))
-    drop-shadow(0 22px 12px rgb(0 0 0 / 1))
-    drop-shadow(0 44px 28px rgb(0 0 0 / 0.96))
-    drop-shadow(0 80px 56px rgb(0 0 0 / 0.88))
-    drop-shadow(0 120px 90px rgb(0 0 0 / 0.7));
+  filter: none;
 }
 
 .forager-forage-sprite-hero .forager-forage-shadow::before,
@@ -1952,42 +1947,69 @@ vercel-live-feedback,
   content: '';
   position: absolute;
   pointer-events: none;
-  z-index: 0;
   border-radius: 50%;
 }
 
 .forager-forage-sprite-hero .forager-forage-shadow::before {
-  left: 6%;
-  right: 6%;
-  bottom: -4%;
-  height: 38%;
+  z-index: 0;
+  left: 10%;
+  right: 8%;
+  bottom: -6%;
+  height: 28%;
   background: radial-gradient(
-    ellipse at center,
-    rgb(0 0 0 / 1) 0%,
-    rgb(0 0 0 / 0.82) 38%,
-    rgb(0 0 0 / 0.4) 62%,
-    transparent 78%
+    ellipse at 50% 42%,
+    rgb(0 0 0 / 0.42) 0%,
+    rgb(0 0 0 / 0.18) 44%,
+    rgb(0 0 0 / 0.05) 70%,
+    transparent 86%
   );
 }
 
 .forager-forage-sprite-hero .forager-forage-shadow::after {
-  left: 18%;
-  right: 18%;
-  bottom: 2%;
-  height: 22%;
+  z-index: 2;
+  inset: -6% -8% -14%;
+  height: auto;
   background: radial-gradient(
-    ellipse at center,
-    rgb(0 0 0 / 1),
-    rgb(0 0 0 / 0.55) 50%,
-    transparent 74%
+    ellipse 78% 72% at 52% 46%,
+    transparent 42%,
+    rgb(0 0 0 / 0.1) 64%,
+    rgb(0 0 0 / 0.38) 84%,
+    rgb(0 0 0 / 0.72) 100%
   );
 }
 
 .forager-forage-sprite-hero .forager-forage-frame {
   overflow: hidden;
   background: transparent;
-  -webkit-mask-image: none;
-  mask-image: none;
+  -webkit-mask-image: radial-gradient(
+    ellipse 88% 84% at 52% 48%,
+    #000 56%,
+    rgb(0 0 0 / 0.78) 74%,
+    rgb(0 0 0 / 0.28) 90%,
+    transparent 100%
+  );
+  mask-image: radial-gradient(
+    ellipse 88% 84% at 52% 48%,
+    #000 56%,
+    rgb(0 0 0 / 0.78) 74%,
+    rgb(0 0 0 / 0.28) 90%,
+    transparent 100%
+  );
+}
+
+.forager-forage-sprite-hero .forager-forage-frame::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 82% 78% at 52% 46%,
+    transparent 38%,
+    rgb(0 0 0 / 0.08) 62%,
+    rgb(0 0 0 / 0.34) 86%,
+    rgb(0 0 0 / 0.7) 100%
+  );
 }
 
 .forager-forage-rays {

@@ -2,7 +2,7 @@ import { withBasePath } from './base-path';
 
 /** Keyed pixel strip for splash (walk / forage / gold, no grass box). */
 export const FORAGE_SPRITE_SRC = withBasePath(
-  '/assets/pics/forager-forage-strip.png',
+  '/assets/pics/forager-forage-strip.png?v=edge3',
 );
 
 export const FORAGE_SPRITE_FRAME_COUNT = 17;
