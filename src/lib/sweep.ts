@@ -286,7 +286,7 @@ export async function buildSweepPlan({
   const transactions: BuildSweepResponse['transactions'] = [];
   /** Sum of per-token minWldOut (quote minus slippage) — the guaranteed floor. */
   let estimatedWldTotal = BigInt(0);
-  /** Sum of per-token quoted amountOut — the fee base (5% of full quotes). */
+  /** Sum of per-token quoted amountOut — the fee base (PLATFORM_FEE_BPS of full quotes). */
   let quotedWldTotal = BigInt(0);
 
   type PreparedCandidate = {
@@ -470,7 +470,7 @@ export async function buildSweepPlan({
   // REVENUE: the platform fee is PLATFORM_FEE_BPS of the *full quoted* output
   // (sum of route.amountOut), not of the post-slippage floor. This is still
   // guaranteed-safe: the swaps produce at least sum(minWldOut) ≈ 97% of the
-  // quotes, and 5% of quotes < 97% of quotes, so the fee transfer can never
+  // quotes, and 2% of quotes < 97% of quotes, so the fee transfer can never
   // exceed what the batch just swapped into the wallet.
   const platformFeeWld =
     (quotedWldTotal * BigInt(PLATFORM_FEE_BPS)) / BigInt(10_000);
@@ -478,7 +478,7 @@ export async function buildSweepPlan({
   const userReceivesWld = estimatedWldTotal - platformFeeWld;
 
   // Every included token satisfies minWldOut >= MIN_WLD_OUT_WEI, so
-  // quotedWldTotal is large enough that the 5% fee cannot round to zero.
+  // quotedWldTotal is large enough that the 2% fee cannot round to zero.
   // The invariant below still guards this unconditionally.
   transactions.push(
     asCalldataTx(

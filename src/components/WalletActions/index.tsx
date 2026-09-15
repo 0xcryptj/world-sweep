@@ -1,6 +1,7 @@
 'use client';
 
 import { ForagerButton } from '@/components/ForagerButton';
+import { FeeFootnote } from '@/components/FeeFootnote';
 import { IosIcon } from '@/components/IosIcon';
 import { TokenIcon } from '@/components/Sweep/TokenIcon';
 import { AnimatedWld } from '@/components/Sweep/AnimatedWld';
@@ -457,6 +458,7 @@ export function WalletActions({
                             ? 'Swap in World App'
                             : 'Preview swap'}
                       </ForagerButton>
+                      <FeeFootnote />
                     </>
                   )}
                 </div>

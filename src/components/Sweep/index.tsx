@@ -7,6 +7,7 @@ import { ForagerActivity, TokenListSkeleton } from '@/components/ForagerActivity
 import { CleanWalletArt } from '@/components/CleanWalletArt';
 import { IosIcon } from '@/components/IosIcon';
 import { ForagerButton } from '@/components/ForagerButton';
+import { FeeFootnote } from '@/components/FeeFootnote';
 import { SectionHeader } from '@/components/SectionHeader';
 import { ForageSuccessShare } from '@/components/Growth/ForageSuccessShare';
 import { NotifyOptIn } from '@/components/Growth/NotifyOptIn';
@@ -1814,6 +1815,7 @@ export function Sweep() {
               {cleanupButtonLabel}
             </ForagerButton>
           ) : (
+          <>
           <LiveFeedback
             label={{
               failed: failureLabel,
@@ -1843,6 +1845,8 @@ export function Sweep() {
               {forageButtonLabel}
             </ForagerButton>
           </LiveFeedback>
+          <FeeFootnote />
+          </>
           )
         ) : null}
       </div>
