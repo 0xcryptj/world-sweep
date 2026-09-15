@@ -45,6 +45,7 @@ import { useMiniKit } from '@worldcoin/minikit-js/minikit-provider';
 import { useUserOperationReceipt } from '@worldcoin/minikit-react';
 import { useSession } from 'next-auth/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   WORLD_CHAIN_ID,
   MAX_TOKENS_PER_SWEEP,
@@ -85,7 +86,7 @@ const SIMULATE_ACTIVITY_MESSAGES = [
 ];
 
 const CLEANUP_ACTIVITY_MESSAGES = [
-  'Preparing leftover transfers in World App...',
+  'Preparing to remove leftover tokens in World App...',
   'Keep World App open while the confirmation sheet appears.',
   'If this takes too long, close and reopen World App then retry.',
 ];
@@ -111,6 +112,63 @@ function formatTokenList(symbols: string[]): string {
     return `${symbols[0]} and ${symbols[1]}`;
   }
   return `${symbols.slice(0, -1).join(', ')}, and ${symbols[symbols.length - 1]}`;
+}
+
+function CleanupConfirmSheet({
+  symbols,
+  onCancel,
+  onConfirm,
+}: {
+  symbols: string[];
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  if (typeof document === 'undefined') {
+    return null;
+  }
+
+  const names = formatTokenList(symbols);
+  const count = symbols.length;
+
+  return createPortal(
+    <div
+      className="forager-sheet"
+      role="dialog"
+      aria-modal
+      aria-labelledby="cleanup-confirm-title"
+      onClick={onCancel}
+    >
+      <div
+        className="forager-sheet-card"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <p id="cleanup-confirm-title" className="forager-title text-[17px]">
+          Remove leftover tokens?
+        </p>
+        <p className="forager-subtitle mt-3 text-[15px] leading-snug">
+          {names} will be removed from this wallet. You will not receive WLD for{' '}
+          {count === 1 ? 'it' : 'them'}.
+        </p>
+        <p className="mt-3 text-[15px] font-semibold leading-snug text-white">
+          This cannot be reversed.
+        </p>
+        <div className="mt-5 flex flex-col gap-2">
+          <ForagerButton size="md" className="w-full" onClick={onConfirm}>
+            Remove tokens
+          </ForagerButton>
+          <ForagerButton
+            size="md"
+            variant="secondary"
+            className="w-full"
+            onClick={onCancel}
+          >
+            Cancel
+          </ForagerButton>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
 }
 
 function buildSkipNotice(
@@ -204,6 +262,7 @@ export function Sweep() {
   const [showExcluded, setShowExcluded] = useState(false);
   const [submitPhase, setSubmitPhase] = useState<SubmitPhase>('idle');
   const [cleanupPhase, setCleanupPhase] = useState<SubmitPhase>('idle');
+  const [cleanupConfirmOpen, setCleanupConfirmOpen] = useState(false);
   const wldUsd = useWldPrice();
   const [txActivityMessages, setTxActivityMessages] = useState(
     SIMULATE_ACTIVITY_MESSAGES,
@@ -1099,12 +1158,29 @@ export function Sweep() {
     }
   };
 
+  const requestCleanup = () => {
+    if (!isInstalled) {
+      setError({
+        title: 'Open in World App',
+        message:
+          'Removing leftover tokens needs World App so MiniKit can sign the transfers.',
+      });
+      return;
+    }
+    if (!walletAddress || cleanupBatch.length === 0) {
+      return;
+    }
+    void hapticSelection();
+    setError(null);
+    setCleanupConfirmOpen(true);
+  };
+
   const onCleanup = async () => {
     if (!isInstalled) {
       setError({
         title: 'Open in World App',
         message:
-          'Cleanup needs World App so MiniKit can sign leftover token transfers.',
+          'Removing leftover tokens needs World App so MiniKit can sign the transfers.',
       });
       return;
     }
@@ -1113,6 +1189,7 @@ export function Sweep() {
       return;
     }
 
+    setCleanupConfirmOpen(false);
     void hapticImpact('medium');
     setError(null);
     setSkipNotice(null);
@@ -1144,7 +1221,7 @@ export function Sweep() {
       };
 
       if (!response.ok) {
-        throw new Error(payload.error ?? 'Could not build this cleanup.');
+        throw new Error(payload.error ?? 'Could not prepare this removal.');
       }
 
       if (payload.transactions.length === 0) {
@@ -1175,7 +1252,7 @@ export function Sweep() {
           payload.skippedTokens.map((token) => token.symbol || 'token'),
         );
         setSkipNotice({
-          title: `${payload.skippedTokens.length} leftover${payload.skippedTokens.length === 1 ? '' : 's'} left for next cleanup`,
+          title: `${payload.skippedTokens.length} leftover${payload.skippedTokens.length === 1 ? '' : 's'} left for next removal`,
           message: `${names} will wait. Cleaning the rest now.`,
           allowlistPending: payload.skippedTokens.some((token) =>
             isAllowlistSkipReason(token.reason),
@@ -1255,8 +1332,8 @@ export function Sweep() {
           ),
         );
         setSkipNotice({
-          title: 'Leftovers cleaned',
-          message: `Moved ${submitted.tokens.length} leftover token${submitted.tokens.length === 1 ? '' : 's'} out of this wallet.`,
+          title: 'Leftovers removed',
+          message: `Removed ${submitted.tokens.length} leftover token${submitted.tokens.length === 1 ? '' : 's'} from this wallet. This cannot be reversed.`,
           allowlistPending: false,
         });
         setCleanupPhase('idle');
@@ -1342,7 +1419,7 @@ export function Sweep() {
 
   const cleanupButtonLabel = (() => {
     if (cleanupPhase === 'building') {
-      return 'Preparing cleanup...';
+      return 'Preparing removal...';
     }
     if (cleanupPhase === 'simulating') {
       return 'Opening World App...';
@@ -1351,7 +1428,7 @@ export function Sweep() {
       return 'Confirming...';
     }
     const count = cleanupBatch.length;
-    return `Clean ${count} leftover${count === 1 ? '' : 's'}`;
+    return `Remove ${count} leftover${count === 1 ? '' : 's'}`;
   })();
 
   return (
@@ -1490,7 +1567,7 @@ export function Sweep() {
                     : checkingTokens.length > 0
                       ? 'Routes are quoting. This should finish in a few seconds.'
                     : nonForagableTokens.length > 0
-                      ? 'These bags have no usable WLD sell path. Clean leftovers to clear them out of this wallet.'
+                      ? 'These bags have no usable WLD sell path. Removing leftovers takes them out of this wallet forever.'
                       : 'No leftover tokens to forage right now. Check back after other mini apps.'}
                 </p>
               </div>
@@ -1630,14 +1707,15 @@ export function Sweep() {
                     <p className="forager-title text-[17px]">Cleanup</p>
                   </div>
                   <p className="forager-subtitle mt-3 text-[15px] leading-snug">
-                    Leftover tokens with no usable WLD route. Clean them out of
-                    this wallet in one World App sign.
+                    Leftover tokens with no usable WLD route. Removing them
+                    takes them out of this wallet. You will not receive WLD,
+                    and this cannot be reversed.
                     {cleanupTokens.length > cleanupBatch.length
                       ? ` First ${cleanupBatch.length} of ${cleanupTokens.length}.`
                       : ''}
                   </p>
                   <ForagerButton
-                    onClick={() => void onCleanup()}
+                    onClick={() => requestCleanup()}
                     disabled={
                       !walletAddress ||
                       isScanning ||
@@ -1727,7 +1805,7 @@ export function Sweep() {
         {growthStep === 'idle' ? (
           tokens.length === 0 && cleanupBatch.length > 0 ? (
             <ForagerButton
-              onClick={() => void onCleanup()}
+              onClick={() => requestCleanup()}
               disabled={isScanning || isQuoting || isSubmitting}
               size="lg"
               variant="primary"
@@ -1768,6 +1846,16 @@ export function Sweep() {
           )
         ) : null}
       </div>
+      {cleanupConfirmOpen ? (
+        <CleanupConfirmSheet
+          symbols={cleanupBatch.map((token) => token.symbol || 'token')}
+          onCancel={() => {
+            void hapticSelection();
+            setCleanupConfirmOpen(false);
+          }}
+          onConfirm={() => void onCleanup()}
+        />
+      ) : null}
     </div>
   );
 }
