@@ -42,6 +42,12 @@ export type SweepTransaction = {
   value?: string;
 };
 
+export type BuildCleanupResponse = {
+  tokens: Array<{ address: string; symbol: string; amount: string }>;
+  skippedTokens: Array<{ address: string; symbol: string; reason: string }>;
+  transactions: SweepTransaction[];
+};
+
 export type BuildSweepResponse = {
   quotes: SweepQuote[];
   skippedTokens: Array<{ address: string; symbol: string; reason: string }>;

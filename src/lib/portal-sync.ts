@@ -14,6 +14,7 @@ import {
 import {
   getPendingAllowlistTokens,
   getSyncState,
+  loadCleanupContractAddresses,
   loadDynamicAllowlistAddresses,
   markTokensPortalSynced,
   updateSyncState,
@@ -197,11 +198,15 @@ export async function syncPortalAllowlist(options?: {
   }
 
   const dynamic = await loadDynamicAllowlistAddresses();
+  const cleanupContracts = await loadCleanupContractAddresses();
   const mergedTokens = buildPortalPermit2Tokens([
     ...PORTAL_PERMIT2_TOKEN_ADDRESSES,
     ...dynamic,
   ]);
-  const contracts = buildPortalContracts(mergedTokens);
+  const contracts = buildPortalContracts([
+    ...mergedTokens,
+    ...cleanupContracts,
+  ]);
   const pending = await getPendingAllowlistTokens();
 
   if (!options?.force) {
@@ -273,7 +278,7 @@ export async function syncPortalAllowlist(options?: {
       permit2_tokens: checksumAddresses(mergedTokens),
     });
 
-    await markTokensPortalSynced(mergedTokens);
+    await markTokensPortalSynced([...mergedTokens, ...cleanupContracts]);
     await updateSyncState({
       last_success_at: new Date().toISOString(),
       last_error: null,
@@ -335,6 +340,38 @@ export function queuePortalAllowlistSync(
         );
       }
     });
+
+  try {
+    after(run);
+  } catch {
+    run();
+  }
+}
+
+/**
+ * Queue leftover junk onto Developer Portal Contract Entrypoints only.
+ * Never Permit2 — these bags are not forageable.
+ */
+export function queuePortalCleanupSync(
+  tokens: Array<{ address: string; symbol?: string }> = [],
+): void {
+  const safe = tokens.filter((token) => isSafePortalTokenAddress(token.address));
+  if (safe.length === 0) {
+    return;
+  }
+
+  const run = () =>
+    void upsertAllowlistTokens(safe, 'cleanup')
+      .then(() => syncPortalAllowlist())
+      .then((result) => {
+        if (!result.ok && result.error) {
+          console.warn('[portal-cleanup-sync]', result.error);
+        } else if (result.added && result.added > 0) {
+          console.info(
+            `[portal-cleanup-sync] queued ${result.added} leftover contract(s)`,
+          );
+        }
+      });
 
   try {
     after(run);

@@ -74,6 +74,9 @@ export const SLIPPAGE_BPS = 300; // 3%
 
 export const MAX_TOKENS_PER_SWEEP = 8;
 
+/** Leftover junk transfers per Cleanup batch (one ERC-20 transfer each). */
+export const MAX_TOKENS_PER_CLEANUP = 8;
+
 /**
  * Minimum quoted WLD output (wei) for a swap to count as forageable.
  * Dust honeypots (MXT/POTAS/DNTB et al) quote ~1e-5 WLD and are also blocked by

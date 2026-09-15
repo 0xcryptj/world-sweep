@@ -125,3 +125,21 @@ export function isForageableToken(
 ): boolean {
   return getTokenExclusionReason(token) === null;
 }
+
+/** Leftover bags with no forageable Uniswap route — eligible for Cleanup. */
+export const CLEANUP_EXCLUSION_REASONS = [
+  'no_liquidity',
+  'output_too_small',
+  'honeypot',
+  'malicious',
+  'transfer_restricted',
+] as const;
+
+export type CleanupExclusionReason = (typeof CLEANUP_EXCLUSION_REASONS)[number];
+
+export function isCleanupReason(reason: string | null | undefined): boolean {
+  return Boolean(
+    reason &&
+      (CLEANUP_EXCLUSION_REASONS as readonly string[]).includes(reason),
+  );
+}

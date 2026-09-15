@@ -30,9 +30,13 @@ import {
   writeClientScanCache,
 } from '@/lib/client-scan-cache';
 import { formatUsd, useWldPrice, wldWeiToUsd } from '@/lib/use-wld-price';
-import { isForageableToken } from '@/lib/token-filters';
+import { isCleanupReason, isForageableToken } from '@/lib/token-filters';
 import type { ScanExclusionReason } from '@/lib/forage-scan';
-import type { BuildSweepResponse, WalletToken } from '@/lib/types';
+import type {
+  BuildCleanupResponse,
+  BuildSweepResponse,
+  WalletToken,
+} from '@/lib/types';
 import { requestWalletRefresh } from '@/lib/wallet-refresh';
 import { LiveFeedback } from '@worldcoin/mini-apps-ui-kit-react';
 import { MiniKit } from '@worldcoin/minikit-js';
@@ -46,6 +50,7 @@ import {
   RPC_URL,
   WORLD_CHAIN_ID,
   MAX_TOKENS_PER_SWEEP,
+  MAX_TOKENS_PER_CLEANUP,
 } from '@/lib/constants';
 
 type SweepState = 'idle' | 'loading-tokens' | 'ready' | 'building' | 'pending';
@@ -56,6 +61,8 @@ type ExcludedToken = {
   address: string;
   symbol: string;
   name: string;
+  decimals?: number;
+  balance?: string;
   balanceFormatted: string;
   logoUrl?: string | null;
   priceUsd?: number | null;
@@ -75,6 +82,12 @@ const PREVIEW_ACTIVITY_MESSAGES = [
 
 const SIMULATE_ACTIVITY_MESSAGES = [
   'Preparing your transaction request in World App...',
+  'Keep World App open while the confirmation sheet appears.',
+  'If this takes too long, close and reopen World App then retry.',
+];
+
+const CLEANUP_ACTIVITY_MESSAGES = [
+  'Preparing leftover transfers in World App...',
   'Keep World App open while the confirmation sheet appears.',
   'If this takes too long, close and reopen World App then retry.',
 ];
@@ -191,6 +204,7 @@ export function Sweep() {
   const [skipNotice, setSkipNotice] = useState<SkipNotice | null>(null);
   const [showExcluded, setShowExcluded] = useState(false);
   const [submitPhase, setSubmitPhase] = useState<SubmitPhase>('idle');
+  const [cleanupPhase, setCleanupPhase] = useState<SubmitPhase>('idle');
   const wldUsd = useWldPrice();
   const [txActivityMessages, setTxActivityMessages] = useState(
     SIMULATE_ACTIVITY_MESSAGES,
@@ -265,6 +279,16 @@ export function Sweep() {
     [excludedTokens],
   );
 
+  const cleanupTokens = useMemo(
+    () => nonForagableTokens.filter((token) => isCleanupReason(token.reason)),
+    [nonForagableTokens],
+  );
+
+  const cleanupBatch = useMemo(
+    () => cleanupTokens.slice(0, MAX_TOKENS_PER_CLEANUP),
+    [cleanupTokens],
+  );
+
   const cantForageLabel = useMemo(() => {
     if (nonForagableTokens.length === 0) {
       return "Can't forage";
@@ -298,7 +322,7 @@ export function Sweep() {
     [forageBatch],
   );
 
-  const isSubmitting = submitPhase !== 'idle';
+  const isSubmitting = submitPhase !== 'idle' || cleanupPhase !== 'idle';
   const isScanning = state === 'loading-tokens';
 
   const activityOverlay = useMemo(() => {
@@ -326,8 +350,20 @@ export function Sweep() {
       };
     }
 
+    if (cleanupPhase === 'simulating') {
+      return {
+        title: 'Opening World App',
+        messages: CLEANUP_ACTIVITY_MESSAGES,
+        icon: 'wallet' as const,
+        durationMs: 40_000,
+        variant: 'default' as const,
+        complete: false,
+        showCube: false,
+      };
+    }
+
     return null;
-  }, [isQuoting, submitPhase, txActivityMessages]);
+  }, [cleanupPhase, isQuoting, submitPhase, txActivityMessages]);
 
   const loadTokens = useCallback(async (forceRefresh = false) => {
     if (!walletAddress) {
@@ -380,6 +416,8 @@ export function Sweep() {
           address: token.address,
           symbol: token.symbol,
           name: token.name,
+          decimals: token.decimals,
+          balance: token.balance,
           balanceFormatted: token.balanceFormatted,
           logoUrl: token.logoUrl,
           priceUsd: token.priceUsd,
@@ -1058,6 +1096,224 @@ export function Sweep() {
     }
   };
 
+  const onCleanup = async () => {
+    if (!isInstalled) {
+      setError({
+        title: 'Open in World App',
+        message:
+          'Cleanup needs World App so MiniKit can sign leftover token transfers.',
+      });
+      return;
+    }
+
+    if (!walletAddress || cleanupBatch.length === 0) {
+      return;
+    }
+
+    void hapticImpact('medium');
+    setError(null);
+    setSkipNotice(null);
+    setCleanupPhase('building');
+    setState('pending');
+
+    try {
+      const response = await fetchWithTimeout(
+        apiPath('/build-cleanup'),
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            walletAddress,
+            tokens: cleanupBatch.map((token) => ({
+              address: token.address,
+              symbol: token.symbol,
+              name: token.name,
+              balance: token.balance,
+              reason: token.reason,
+            })),
+          }),
+        },
+        50_000,
+      );
+
+      const payload = (await response.json()) as BuildCleanupResponse & {
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(payload.error ?? 'Could not build this cleanup.');
+      }
+
+      if (payload.transactions.length === 0) {
+        const names = formatTokenList(
+          payload.skippedTokens.map((token) => token.symbol || 'token'),
+        );
+        const reasons = [
+          ...new Set(payload.skippedTokens.map((token) => token.reason)),
+        ]
+          .slice(0, 3)
+          .join(' · ');
+        setSkipNotice({
+          title: 'Nothing to clean this round',
+          message: names
+            ? `${names}${reasons ? ` — ${reasons}` : ''}. Rescan and try again.`
+            : 'Those leftovers cannot transfer right now. Rescan and try again.',
+          allowlistPending: payload.skippedTokens.some((token) =>
+            isAllowlistSkipReason(token.reason),
+          ),
+        });
+        setCleanupPhase('idle');
+        setState('ready');
+        return;
+      }
+
+      if (payload.skippedTokens.length > 0) {
+        const names = formatTokenList(
+          payload.skippedTokens.map((token) => token.symbol || 'token'),
+        );
+        setSkipNotice({
+          title: `${payload.skippedTokens.length} leftover${payload.skippedTokens.length === 1 ? '' : 's'} left for next cleanup`,
+          message: `${names} will wait. Cleaning the rest now.`,
+          allowlistPending: payload.skippedTokens.some((token) =>
+            isAllowlistSkipReason(token.reason),
+          ),
+        });
+      }
+
+      setCleanupPhase('simulating');
+
+      const sendCleanup = async (planToSend: BuildCleanupResponse) => {
+        const result = await sendMiniKitTransaction({
+          chainId: WORLD_CHAIN_ID,
+          transactions: planToSend.transactions,
+        });
+        const payloadResult =
+          (result as { data?: Record<string, unknown> }).data ??
+          (result as Record<string, unknown>);
+        if (payloadResult?.status === 'error') {
+          throw payloadResult;
+        }
+        return result;
+      };
+
+      let submitted = payload;
+      let result: Awaited<ReturnType<typeof sendMiniKitTransaction>>;
+      try {
+        result = await sendCleanup(submitted);
+      } catch (firstSendError) {
+        const retryable =
+          isSimulationFailedError(firstSendError) ||
+          getMiniKitErrorCode(firstSendError) === 'invalid_contract';
+        if (!retryable || submitted.tokens.length < 2) {
+          throw firstSendError;
+        }
+
+        const dropped = submitted.tokens[submitted.tokens.length - 1];
+        const reduced = {
+          ...submitted,
+          tokens: submitted.tokens.slice(0, -1),
+          transactions: submitted.transactions.slice(0, -1),
+        };
+        if (reduced.tokens.length === 0 || reduced.transactions.length === 0) {
+          throw firstSendError;
+        }
+
+        setSkipNotice({
+          title: 'Retrying without a failing token',
+          message: `${dropped.symbol || 'One token'} failed World App simulation — cleaning the rest.`,
+          allowlistPending:
+            getMiniKitErrorCode(firstSendError) === 'invalid_contract',
+        });
+        submitted = reduced;
+        result = await sendCleanup(reduced);
+      }
+
+      const opHash = extractUserOpHash(result);
+      if (!opHash) {
+        throw new Error('No userOpHash returned');
+      }
+
+      setCleanupPhase('confirming');
+      setIsConfirming(true);
+
+      try {
+        await poll(opHash);
+        void hapticNotification('success');
+        const cleaned = new Set(
+          submitted.tokens.map((token) => token.address.toLowerCase()),
+        );
+        const now = Date.now();
+        for (const address of cleaned) {
+          recentlyForagedRef.current.set(address, now);
+        }
+        setExcludedTokens((current) =>
+          current.filter(
+            (token) => !cleaned.has(token.address.toLowerCase()),
+          ),
+        );
+        setSkipNotice({
+          title: 'Leftovers cleaned',
+          message: `Moved ${submitted.tokens.length} leftover token${submitted.tokens.length === 1 ? '' : 's'} out of this wallet.`,
+          allowlistPending: false,
+        });
+        setCleanupPhase('idle');
+        setIsConfirming(false);
+        setState('ready');
+        void loadTokens(true);
+        requestWalletRefresh({ reason: 'forage', force: true });
+      } catch (confirmError) {
+        const nextError: AppError = {
+          title: 'Cleanup timed out',
+          message:
+            'World App may still be processing. Rescan in a minute to confirm leftovers are gone.',
+        };
+        if (
+          confirmError instanceof Error &&
+          /aborted|timeout/i.test(confirmError.message)
+        ) {
+          nextError.details = confirmError.message;
+        }
+        void hapticNotification('error');
+        setError(nextError);
+        setCleanupPhase('idle');
+        setIsConfirming(false);
+        setState('ready');
+      }
+    } catch (cleanupError) {
+      if (isUserRejectedError(cleanupError)) {
+        setCleanupPhase('idle');
+        setIsConfirming(false);
+        setState('ready');
+        return;
+      }
+
+      console.error('Cleanup error payload:', cleanupError);
+      setCleanupPhase('idle');
+      setIsConfirming(false);
+      setState('ready');
+
+      const rawMessage =
+        cleanupError instanceof FetchTimeoutError
+          ? cleanupError.message
+          : cleanupError instanceof Error
+            ? cleanupError.message
+            : String(cleanupError);
+
+      void hapticNotification('error');
+      const formatted =
+        cleanupError instanceof FetchTimeoutError
+          ? formatApiError(rawMessage)
+          : formatMiniKitError(cleanupError);
+      setError({
+        ...formatted,
+        title:
+          formatted.title === 'Forage failed'
+            ? 'Cleanup failed'
+            : formatted.title,
+      });
+    }
+  };
+
   const canForage = Boolean(plan && plan.quotes.length > 0);
   const forageButtonLabel = (() => {
     if (submitPhase === 'building') {
@@ -1066,7 +1322,7 @@ export function Sweep() {
     if (submitPhase === 'simulating') {
       return 'Opening World App...';
     }
-    if (submitPhase === 'confirming' || isConfirming) {
+    if (submitPhase === 'confirming') {
       return 'Confirming...';
     }
     if (isQuoting) {
@@ -1079,6 +1335,20 @@ export function Sweep() {
       return 'Build preview';
     }
     return 'Select forageable tokens';
+  })();
+
+  const cleanupButtonLabel = (() => {
+    if (cleanupPhase === 'building') {
+      return 'Preparing cleanup...';
+    }
+    if (cleanupPhase === 'simulating') {
+      return 'Opening World App...';
+    }
+    if (cleanupPhase === 'confirming') {
+      return 'Confirming...';
+    }
+    const count = cleanupBatch.length;
+    return `Clean ${count} leftover${count === 1 ? '' : 's'}`;
   })();
 
   return (
@@ -1217,7 +1487,7 @@ export function Sweep() {
                     : checkingTokens.length > 0
                       ? 'Routes are still quoting. Pull to rescan in a few seconds.'
                     : nonForagableTokens.length > 0
-                      ? 'These bags have no usable WLD sell path, too little output, or an unsafe transfer.'
+                      ? 'These bags have no usable WLD sell path. Clean leftovers to clear them out of this wallet.'
                       : 'No leftover tokens to forage right now. Check back after other mini apps.'}
                 </p>
               </div>
@@ -1350,6 +1620,35 @@ export function Sweep() {
                   ))}
                 </div>
               ) : null}
+              {cleanupBatch.length > 0 ? (
+                <div className="forager-cleanup forager-row-enter mt-3">
+                  <div className="flex items-center gap-2">
+                    <IosIcon name="wallet" size={18} />
+                    <p className="forager-title text-[17px]">Cleanup</p>
+                  </div>
+                  <p className="forager-subtitle mt-3 text-[15px] leading-snug">
+                    Leftover tokens with no usable WLD route. Clean them out of
+                    this wallet in one World App sign.
+                    {cleanupTokens.length > cleanupBatch.length
+                      ? ` First ${cleanupBatch.length} of ${cleanupTokens.length}.`
+                      : ''}
+                  </p>
+                  <ForagerButton
+                    onClick={() => void onCleanup()}
+                    disabled={
+                      !walletAddress ||
+                      isScanning ||
+                      isQuoting ||
+                      isSubmitting
+                    }
+                    size="md"
+                    variant="secondary"
+                    className="mt-4 w-full"
+                  >
+                    {cleanupButtonLabel}
+                  </ForagerButton>
+                </div>
+              ) : null}
             </div>
           ) : null}
 
@@ -1423,13 +1722,24 @@ export function Sweep() {
         ) : null}
 
         {growthStep === 'idle' ? (
+          tokens.length === 0 && cleanupBatch.length > 0 ? (
+            <ForagerButton
+              onClick={() => void onCleanup()}
+              disabled={isScanning || isQuoting || isSubmitting}
+              size="lg"
+              variant="primary"
+              className="w-full"
+            >
+              {cleanupButtonLabel}
+            </ForagerButton>
+          ) : (
           <LiveFeedback
             label={{
               failed: failureLabel,
               pending:
                 submitPhase === 'simulating'
                   ? 'Opening World App...'
-                  : isConfirming
+                  : submitPhase === 'confirming'
                     ? 'Confirming...'
                     : BRAND_COPY.foragePending,
               success: BRAND_COPY.forageSuccess,
@@ -1441,8 +1751,7 @@ export function Sweep() {
               onClick={() => void onSweep()}
               disabled={
                 selectedTokens.length === 0 ||
-                isConfirming ||
-                state === 'loading-tokens' ||
+                isScanning ||
                 isQuoting ||
                 isSubmitting
               }
@@ -1453,6 +1762,7 @@ export function Sweep() {
               {forageButtonLabel}
             </ForagerButton>
           </LiveFeedback>
+          )
         ) : null}
       </div>
     </div>

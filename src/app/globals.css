@@ -673,6 +673,14 @@ vercel-live-feedback,
   padding: 1rem;
 }
 
+.forager-cleanup {
+  position: relative;
+  background: var(--forager-grouped);
+  border: 0.5px solid rgb(255 255 255 / 10%);
+  border-radius: 16px;
+  padding: 1rem;
+}
+
 .forager-title {
   color: var(--foreground);
   font-size: 17px;

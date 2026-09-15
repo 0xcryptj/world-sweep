@@ -36,6 +36,8 @@ export type ScannedExclusion = {
   address: string;
   symbol: string;
   name: string;
+  decimals?: number;
+  balance?: string;
   balanceFormatted: string;
   logoUrl?: string | null;
   priceUsd?: number | null;
@@ -96,6 +98,8 @@ function toExclusion(
     address: token.address,
     symbol: token.symbol,
     name: token.name,
+    decimals: token.decimals,
+    balance: token.balance,
     balanceFormatted: token.balanceFormatted,
     logoUrl: token.logoUrl,
     priceUsd: token.priceUsd,

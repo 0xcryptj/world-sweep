@@ -64,7 +64,7 @@ async function supabaseFetch<T>(
 export async function loadDynamicAllowlistAddresses(): Promise<string[]> {
   try {
     const rows = await supabaseFetch<AllowlistRow[]>(
-      'portal_allowlist_tokens?select=address,portal_synced_at&order=created_at.asc',
+      'portal_allowlist_tokens?select=address,symbol,source,portal_synced_at&order=created_at.asc',
     );
     if (!rows) {
       return [];
@@ -72,6 +72,9 @@ export async function loadDynamicAllowlistAddresses(): Promise<string[]> {
     const addresses: string[] = [];
     const confirmed: string[] = [];
     for (const row of rows) {
+      if (row.source === 'cleanup') {
+        continue;
+      }
       const address = normalizePortalAddress(row.address);
       if (!address || !isSafePortalTokenAddress(address)) {
         continue;
@@ -86,6 +89,35 @@ export async function loadDynamicAllowlistAddresses(): Promise<string[]> {
   } catch (error) {
     console.warn(
       '[portal-allowlist] failed to load dynamic tokens',
+      error instanceof Error ? error.message : error,
+    );
+    return [];
+  }
+}
+
+/** Contract-only leftovers — never added to Permit2 / forage. */
+export async function loadCleanupContractAddresses(): Promise<string[]> {
+  try {
+    const rows = await supabaseFetch<AllowlistRow[]>(
+      'portal_allowlist_tokens?select=address,source&source=eq.cleanup&order=created_at.asc',
+    );
+    if (!rows) {
+      return [];
+    }
+    const addresses: string[] = [];
+    const seen = new Set<string>();
+    for (const row of rows) {
+      const address = normalizePortalAddress(row.address);
+      if (!address || !isSafePortalTokenAddress(address) || seen.has(address)) {
+        continue;
+      }
+      seen.add(address);
+      addresses.push(address);
+    }
+    return addresses;
+  } catch (error) {
+    console.warn(
+      '[portal-allowlist] failed to load cleanup contracts',
       error instanceof Error ? error.message : error,
     );
     return [];
@@ -136,15 +168,24 @@ export async function upsertAllowlistTokens(
       (existing ?? []).map((row) => row.address.toLowerCase()),
     );
 
+    const toWrite =
+      source === 'cleanup'
+        ? payload.filter((row) => !existingSet.has(row.address))
+        : payload;
+
+    if (toWrite.length === 0) {
+      return [];
+    }
+
     await supabaseFetch('portal_allowlist_tokens', {
       method: 'POST',
       headers: {
         Prefer: 'resolution=merge-duplicates,return=minimal',
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(toWrite),
     });
 
-    const inserted = payload
+    const inserted = toWrite
       .map((row) => row.address)
       .filter((address) => !existingSet.has(address));
 
