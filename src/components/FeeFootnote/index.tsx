@@ -4,7 +4,7 @@ import { PLATFORM_FEE_PERCENT } from '@/lib/constants';
 export function FeeFootnote() {
   return (
     <p className="forager-fee-footnote">
-      {PLATFORM_FEE_PERCENT}% fee
+      {PLATFORM_FEE_PERCENT}% fee · includes token foraging
     </p>
   );
 }

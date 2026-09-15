@@ -813,11 +813,12 @@ vercel-live-feedback,
 }
 
 .forager-fee-footnote {
-  margin: 0.5rem 0 0;
+  margin: 0;
+  padding: 0 0.75rem 0.4rem;
   text-align: center;
   font-size: 10px;
   line-height: 1;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
   color: rgb(255 255 255 / 32%);
   pointer-events: none;
   user-select: none;

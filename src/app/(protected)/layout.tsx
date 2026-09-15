@@ -1,4 +1,5 @@
 import { auth } from '@/auth';
+import { FeeFootnote } from '@/components/FeeFootnote';
 import { InviteAttributionBootstrap } from '@/components/Growth/InviteAttributionBootstrap';
 import { Navigation } from '@/components/Navigation';
 import { Page } from '@/components/PageLayout';
@@ -23,6 +24,7 @@ export default async function TabsLayout({
         {children}
       </div>
       <Page.Footer className="w-full shrink-0 px-0">
+        <FeeFootnote />
         <Navigation />
       </Page.Footer>
     </Page>
