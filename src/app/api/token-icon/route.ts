@@ -44,6 +44,31 @@ async function fetchJson(url: string): Promise<unknown | null> {
  * `pairs[].info.imageUrl`. Covers most actively traded World Chain mini-app
  * tokens even when the static dd.dexscreener.com CDN path 404s.
  */
+async function fetchDexScreenerV1ImageUrl(address: string): Promise<string | null> {
+  const json = (await fetchJson(
+    `https://api.dexscreener.com/tokens/v1/worldchain/${address.toLowerCase()}`,
+  )) as Array<{
+    baseToken?: { address?: string };
+    info?: { imageUrl?: string };
+    liquidity?: { usd?: number };
+  }> | null;
+
+  if (!Array.isArray(json)) {
+    return null;
+  }
+
+  const lower = address.toLowerCase();
+  const ranked = json
+    .filter(
+      (pair) =>
+        pair?.baseToken?.address?.toLowerCase() === lower &&
+        Boolean(pair?.info?.imageUrl),
+    )
+    .sort((a, b) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0));
+
+  return ranked[0]?.info?.imageUrl?.trim() || null;
+}
+
 async function fetchDexScreenerImageUrl(address: string): Promise<string | null> {
   const json = (await fetchJson(
     `https://api.dexscreener.com/latest/dex/tokens/${address}`,
@@ -159,18 +184,15 @@ export async function GET(request: Request) {
   const addressLower = address.toLowerCase();
 
   try {
-    // Fast path: known-good direct URLs (caller-provided logo, curated
-    // overrides, DexScreener static CDN).
+    const seen = new Set<string>();
     const directCandidates = [
       logoUrlParam,
       TOKEN_ICON_OVERRIDES[addressLower],
       TOKEN_ICON_OVERRIDES[symbolParam],
-      getDexScreenerTokenIconUrl(addressLower),
     ]
       .map((url) => normalizeTokenLogoUrl(url))
       .filter((url): url is string => Boolean(url));
 
-    const seen = new Set<string>();
     for (const candidate of directCandidates) {
       if (seen.has(candidate)) {
         continue;
@@ -182,9 +204,8 @@ export async function GET(request: Request) {
       }
     }
 
-    // Slow path: try metadata APIs sequentially and stop on first usable image.
-    // Parallel fan-out burned Dex/Gecko/Alchemy quotas on every cold icon miss.
     const metadataFetchers = [
+      () => fetchDexScreenerV1ImageUrl(address),
       () => fetchDexScreenerImageUrl(address),
       () => fetchGeckoTerminalImageUrl(address),
       () => fetchCoinGeckoImageUrl(address),
@@ -200,6 +221,14 @@ export async function GET(request: Request) {
       }
       seen.add(candidate);
       const proxied = await proxyImageUrl(candidate);
+      if (proxied) {
+        return proxied;
+      }
+    }
+
+    const cdn = normalizeTokenLogoUrl(getDexScreenerTokenIconUrl(addressLower));
+    if (cdn && !seen.has(cdn)) {
+      const proxied = await proxyImageUrl(cdn);
       if (proxied) {
         return proxied;
       }

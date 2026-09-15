@@ -194,9 +194,10 @@ async function quoteTokenLiquidity(
     };
   }
 
-  // One quote path with scan + preview + build: cache-first, single in-flight.
+  void mode;
+  // Match preview/build: retry flakes. Fast used to skip retries and drop real bags.
   const route = await quoteRouteToWld(token, {
-    skipRetry: mode === 'fast',
+    skipRetry: false,
   });
   if (!route) {
     return { route: null, reason: 'no_liquidity' };
@@ -371,10 +372,14 @@ export async function scanWalletForForage(
       continue;
     }
     if (keepValued) {
-      swappable.push({
-        ...token,
-        cachedRoute: null,
-      });
+      // Valued, but no confirmed WLD route yet — do not treat as forageable.
+      // That was selecting 5 bags and silently shipping 3.
+      excluded.push(
+        toExclusion(
+          token,
+          reason === 'output_too_small' ? 'output_too_small' : 'scan_deferred',
+        ),
+      );
       portalQueue.push({ address: token.address, symbol: token.symbol });
       continue;
     }
@@ -386,8 +391,7 @@ export async function scanWalletForForage(
     }
     swappable.push({
       ...token,
-      // Fast firstSuccess amounts must not become the displayed/build quote.
-      cachedRoute: mode === 'fast' ? null : serializeRoute(route),
+      cachedRoute: serializeRoute(route),
     });
     portalQueue.push({ address: token.address, symbol: token.symbol });
   }

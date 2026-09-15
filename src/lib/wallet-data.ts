@@ -47,12 +47,12 @@ const WLD_STALE_MS = 60_000;
 const HOLDINGS_TIMEOUT_MS = 10_000;
 const WLD_TIMEOUT_MS = 4_000;
 const SCAN_TIMEOUT_MS = {
-  fast: 8_000,
-  full: 38_000,
+  fast: 16_000,
+  full: 48_000,
 } as const;
 const SCAN_BUDGET_MS = {
-  fast: 6_000,
-  full: 32_000,
+  fast: 12_000,
+  full: 40_000,
 } as const;
 
 const SCAN_HIT_TTL_MS = {
@@ -344,7 +344,7 @@ async function runForageScan(
     {
       force,
       // Fast path: lighter metadata so quotes start sooner.
-      maxEnrich: mode === 'fast' ? 24 : 48,
+      maxEnrich: mode === 'fast' ? 64 : 128,
       enrichMetadata: true,
     },
   );

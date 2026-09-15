@@ -53,7 +53,7 @@ export async function GET(request: Request) {
     const [holdingsResult] = await Promise.all([
       loadWalletHoldingsCached(address, {
         force: refresh,
-        maxEnrich: 24,
+        maxEnrich: 96,
       }),
       loadAllowlistOverlayCached(),
     ]);

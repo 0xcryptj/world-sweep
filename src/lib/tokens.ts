@@ -532,25 +532,16 @@ export async function enrichTokenMetadata(
     return tokens;
   }
 
-  const needsWork = tokens.filter(tokenNeedsMetadataEnrich);
-
-  // Prefer one DexScreener batch + one multicall over per-token Alchemy storms.
-  const needOnChain = needsWork.filter(
-    (token) =>
-      isPlaceholderSymbol(token.symbol) || isPlaceholderName(token.name),
-  );
-
   const [onChainMap, marketMap] = await Promise.all([
     readOnChainMetadataBatch(
-      needOnChain.map((token) => getAddress(token.address) as Address),
+      tokens.map((token) => getAddress(token.address) as Address),
     ),
-    // Always pull DexScreener prices for the displayed set, not just
-    // tokens that still need a ticker/logo.
     fetchDexScreenerTokenMetaBatch(tokens.map((token) => token.address)),
   ]);
 
   // Alchemy only for tokens still incomplete after on-chain + Dex batch.
-  const stillNeedAlchemy = needsWork.filter((token) => {
+  const stillNeedAlchemy = tokens
+    .filter((token) => {
     const key = token.address.toLowerCase();
     const onChain = onChainMap.get(key);
     const market = marketMap.get(key);
@@ -568,7 +559,8 @@ export async function enrichTokenMetadata(
       isPlaceholderName(name) ||
       !logo
     );
-  });
+  })
+    .slice(0, 24);
 
   const alchemyByAddress = new Map<string, AlchemyTokenMetadata | null>();
   await mapPool(stillNeedAlchemy, 6, async (token) => {
@@ -579,11 +571,6 @@ export async function enrichTokenMetadata(
   return tokens.map((token) => {
     const key = token.address.toLowerCase();
     const market = marketMap.get(key);
-
-    if (!tokenNeedsMetadataEnrich(token)) {
-      return applyMarketQuote(token, market);
-    }
-
     const alchemy = alchemyByAddress.get(key);
     const onChain = onChainMap.get(key);
 
@@ -602,10 +589,10 @@ export async function enrichTokenMetadata(
       symbol;
 
     const decimals =
-      alchemy?.decimals ?? onChain?.decimals ?? token.decimals;
+      onChain?.decimals ?? alchemy?.decimals ?? token.decimals;
     const logoUrl =
-      alchemy?.logo?.trim() ||
       market?.logoUrl?.trim() ||
+      alchemy?.logo?.trim() ||
       token.logoUrl ||
       null;
 

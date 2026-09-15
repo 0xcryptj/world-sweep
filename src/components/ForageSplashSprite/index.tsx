@@ -41,14 +41,16 @@ export function ForageSplashSprite({
       }
       aria-hidden
     >
-      <span className="forager-forage-frame">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          className="forager-forage-sheet"
-          src={FORAGE_SPRITE_SRC}
-          alt=""
-          draggable={false}
-        />
+      <span className="forager-forage-shadow">
+        <span className="forager-forage-frame">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            className="forager-forage-sheet"
+            src={FORAGE_SPRITE_SRC}
+            alt=""
+            draggable={false}
+          />
+        </span>
       </span>
     </div>
   );

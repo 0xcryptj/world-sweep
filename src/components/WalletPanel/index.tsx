@@ -1,5 +1,6 @@
 'use client';
 
+import { WalletActions } from '@/components/WalletActions';
 import { ForagerButton } from '@/components/ForagerButton';
 import { SectionHeader } from '@/components/SectionHeader';
 import { ShineBorder } from '@/components/ui/shine-border';
@@ -242,6 +243,12 @@ export function WalletPanel() {
             {copied ? 'Copied' : 'Copy'}
           </span>
         </button>
+        <WalletActions
+          walletAddress={walletAddress}
+          wldBalance={data.wldBalance}
+          tokens={data.tokens}
+          forageableTokens={forageableTokens}
+        />
       </div>
 
       {error ? (

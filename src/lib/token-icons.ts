@@ -73,18 +73,10 @@ export function getTokenIconSources(
   const sources: string[] = [];
   const normalizedLogo = normalizeTokenLogoUrl(token.logoUrl);
 
-  // Static icons downloaded ahead of time by scripts/download-token-icons.ts
-  // — no network round-trip and no generic-fallback flash on first render.
   const localPath = getLocalTokenIconPath(address);
   if (localPath) {
     sources.push(withBasePath(localPath));
   }
-
-  if (normalizedLogo) {
-    sources.push(normalizedLogo);
-  }
-
-  sources.push(getDexScreenerTokenIconUrl(address));
 
   const override =
     TOKEN_ICON_OVERRIDES[address] ?? TOKEN_ICON_OVERRIDES[symbol];
@@ -99,7 +91,13 @@ export function getTokenIconSources(
   if (normalizedLogo) {
     query.set('logoUrl', normalizedLogo);
   }
+  // Proxy first — it pulls DexScreener pair images, Gecko, and explorer logos
+  // instead of 404ing on the static CDN for most World Chain junk tokens.
   sources.push(apiPath(`/token-icon?${query.toString()}`));
+
+  if (normalizedLogo) {
+    sources.push(normalizedLogo);
+  }
 
   return [...new Set(sources)];
 }

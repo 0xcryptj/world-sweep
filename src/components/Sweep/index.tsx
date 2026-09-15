@@ -109,26 +109,32 @@ function buildSkipNotice(
   const allowlistSkipped = skipped.filter((token) =>
     isAllowlistSkipReason(token.reason),
   );
-  if (allowlistSkipped.length === 0) {
-    return null;
-  }
+  const names = formatTokenList(
+    skipped.map((token) => token.symbol || 'token'),
+  );
+  const reasons = [...new Set(skipped.map((token) => token.reason))].slice(0, 3);
+  const reasonText = reasons.join(' · ');
 
-  const symbols = [
-    ...new Set(allowlistSkipped.map((token) => token.symbol || 'token')),
-  ];
-  const names = formatTokenList(symbols);
-  const verb = symbols.length === 1 ? "isn't" : "aren't";
   if (quotedCount > 0) {
     return {
-      title: 'Some tokens skipped',
-      message: `${names} ${verb} allowlisted by World App yet — foraging the rest. Fully close and reopen World App in a minute, then rescan to include ${symbols.length === 1 ? 'it' : 'them'}.`,
+      title: `${skipped.length} of your selection ${skipped.length === 1 ? "isn't" : "aren't"} in this forage`,
+      message: `${names} ${skipped.length === 1 ? 'was' : 'were'} left out (${reasonText}). The quoted tokens will still forage.`,
+      allowlistPending: allowlistSkipped.length > 0,
+    };
+  }
+
+  if (allowlistSkipped.length === skipped.length) {
+    return {
+      title: 'Waiting on World allowlist',
+      message: `${names} ${allowlistSkipped.length === 1 ? "isn't" : "aren't"} allowlisted by World App yet. Fully close and reopen World App in a minute, then rescan.`,
       allowlistPending: true,
     };
   }
+
   return {
-    title: 'Waiting on World allowlist',
-    message: `${names} ${verb} allowlisted by World App yet. Fully close and reopen World App in a minute, then rescan.`,
-    allowlistPending: true,
+    title: 'Couldn’t build this forage',
+    message: `${names}: ${reasonText}. Deselect those tokens or rescan, then try again.`,
+    allowlistPending: allowlistSkipped.length > 0,
   };
 }
 
@@ -236,6 +242,11 @@ export function Sweep() {
     [excludedTokens],
   );
 
+  const checkingTokens = useMemo(
+    () => excludedTokens.filter((token) => token.reason === 'scan_deferred'),
+    [excludedTokens],
+  );
+
   const nonForagableTokens = useMemo(
     () =>
       excludedTokens.filter(
@@ -249,6 +260,30 @@ export function Sweep() {
       ),
     [excludedTokens],
   );
+
+  const cantForageLabel = useMemo(() => {
+    if (nonForagableTokens.length === 0) {
+      return "Can't forage";
+    }
+    if (nonForagableTokens.every((token) => token.reason === 'no_liquidity')) {
+      return 'No WLD route';
+    }
+    if (nonForagableTokens.every((token) => token.reason === 'output_too_small')) {
+      return 'Too little WLD out';
+    }
+    if (nonForagableTokens.every((token) => token.reason === 'honeypot')) {
+      return 'Unsafe sell path';
+    }
+    const labels = nonForagableTokens.map(
+      (token) => token.reasonLabel || token.reason,
+    );
+    const top = labels.sort(
+      (a, b) =>
+        labels.filter((label) => label === b).length -
+        labels.filter((label) => label === a).length,
+    )[0];
+    return top || "Can't forage";
+  }, [nonForagableTokens]);
 
   const selectionKey = useMemo(
     () =>
@@ -340,7 +375,8 @@ export function Sweep() {
             continue;
           }
 
-          const autoSelect = selectedCount < MAX_TOKENS_PER_SWEEP;
+          const autoSelect =
+            selectedCount < MAX_TOKENS_PER_SWEEP && Boolean(token.cachedRoute);
           next[token.address] = autoSelect;
           if (autoSelect) {
             selectedCount += 1;
@@ -1033,7 +1069,9 @@ export function Sweep() {
         <SectionHeader
           title={
             selectedTokens.length > 0
-              ? `${selectedTokens.length} selected`
+              ? plan && plan.quotes.length !== selectedTokens.length && !isQuoting
+                ? `${plan.quotes.length} of ${selectedTokens.length} in this forage`
+                : `${selectedTokens.length} selected`
               : 'Select tokens'
           }
           action={
@@ -1043,20 +1081,27 @@ export function Sweep() {
                   type="button"
                   onClick={() => {
                     void hapticSelection();
-                    const allOn = tokens.every((token) => selected[token.address]);
+                    const capped = tokens.slice(0, MAX_TOKENS_PER_SWEEP);
+                    const allOn = capped.every((token) => selected[token.address]);
                     lastPreviewedKeyRef.current = '';
                     previewRetryRef.current = {};
                     setPlan(null);
                     setSelected(
                       Object.fromEntries(
-                        tokens.map((token) => [token.address, !allOn]),
+                        tokens.map((token) => [
+                          token.address,
+                          !allOn &&
+                            capped.some(
+                              (item) => item.address === token.address,
+                            ),
+                        ]),
                       ),
                     );
                   }}
                   disabled={isSubmitting}
                   className="forager-text-action disabled:opacity-40"
                 >
-                  {tokens.every((token) => selected[token.address])
+                  {tokens.slice(0, MAX_TOKENS_PER_SWEEP).every((token) => selected[token.address])
                     ? 'Clear'
                     : 'Select all'}
                 </button>
@@ -1101,6 +1146,8 @@ export function Sweep() {
                     ? 'Waiting for your wallet'
                     : pendingVerifiedTokens.length > 0
                       ? 'Verified tokens are waiting on World App'
+                    : checkingTokens.length > 0
+                      ? 'Still checking a few bags'
                     : nonForagableTokens.length > 0
                       ? 'Nothing forageable right now'
                       : 'Your wallet is clean'}
@@ -1110,8 +1157,10 @@ export function Sweep() {
                     ? 'Sign in with World and leftover tokens will load automatically.'
                     : pendingVerifiedTokens.length > 0
                       ? 'These tokens have real WLD liquidity. Reopen World App in a minute so Forager can include them.'
+                    : checkingTokens.length > 0
+                      ? 'Routes are still quoting. Pull to rescan in a few seconds.'
                     : nonForagableTokens.length > 0
-                      ? 'No usable Uniswap route to WLD, or the sell path is unsafe.'
+                      ? 'These bags have no usable WLD sell path, too little output, or an unsafe transfer.'
                       : 'No leftover tokens to forage right now. Check back after other mini apps.'}
                 </p>
               </div>
@@ -1178,6 +1227,30 @@ export function Sweep() {
             </div>
           ) : null}
 
+          {checkingTokens.length > 0 ? (
+            <div className="forager-section">
+              <div className="flex items-center gap-3 px-1 pb-2">
+                <span className="forager-nonforage-count forager-numeric shrink-0">
+                  {checkingTokens.length}
+                </span>
+                <span className="min-w-0 flex-1 text-[15px] text-forager-text-muted">
+                  Still checking WLD route
+                </span>
+              </div>
+              <div className="forager-group forager-wallet-list">
+                {checkingTokens.map((token) => (
+                  <TokenListRow
+                    key={token.address}
+                    token={token}
+                    disabled
+                    detail={token.reasonLabel}
+                    wldUsd={wldUsd}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : null}
+
           {nonForagableTokens.length > 0 ? (
             <div className="forager-section">
               <button
@@ -1195,7 +1268,7 @@ export function Sweep() {
                   {nonForagableTokens.length}
                 </span>
                 <span className="min-w-0 flex-1 text-[15px] text-forager-text-muted">
-                  No WLD route
+                  {cantForageLabel}
                 </span>
                 <span
                   className={`forager-nonforage-chevron ml-1 shrink-0 transition-transform duration-200 ${
@@ -1213,6 +1286,7 @@ export function Sweep() {
                       key={token.address}
                       token={token}
                       disabled
+                      detail={token.reasonLabel}
                       wldUsd={wldUsd}
                       className="opacity-70"
                     />
@@ -1235,7 +1309,11 @@ export function Sweep() {
               ) : plan ? (
                 <>
               <p className="mt-3 text-[15px] leading-snug text-forager-text-muted">
-                Swapping {plan.quotes.length} leftover token
+                Swapping {plan.quotes.length}
+                {forageBatch.length !== plan.quotes.length
+                  ? ` of ${forageBatch.length} selected`
+                  : ''}{' '}
+                leftover token
                 {plan.quotes.length === 1 ? '' : 's'} to WLD
               </p>
               <div className="mt-4 flex flex-wrap items-baseline gap-x-1.5">
@@ -1252,21 +1330,17 @@ export function Sweep() {
                   </span>
                 ) : null}
               </div>
-              {plan.skippedTokens.some((token) =>
-                isAllowlistSkipReason(token.reason),
-              ) && plan.quotes.length > 0 ? (
+              {plan.skippedTokens.length > 0 && plan.quotes.length > 0 ? (
                 <p className="forager-subtitle mt-3 text-[15px] leading-snug">
-                  {(() => {
-                    const allowlistSkipped = plan.skippedTokens.filter((token) =>
-                      isAllowlistSkipReason(token.reason),
-                    );
-                    const names = formatTokenList(
-                      allowlistSkipped.map((token) => token.symbol || 'token'),
-                    );
-                    return `Skipping ${names} — World App hasn't allowlisted ${
-                      allowlistSkipped.length === 1 ? 'it' : 'them'
-                    } yet. Foraging the rest.`;
-                  })()}
+                  {formatTokenList(
+                    plan.skippedTokens.map((token) => token.symbol || 'token'),
+                  )}{' '}
+                  {plan.skippedTokens.length === 1 ? 'is' : 'are'} out of this
+                  batch
+                  {plan.skippedTokens[0]?.reason
+                    ? ` — ${plan.skippedTokens[0].reason}`
+                    : ''}
+                  {plan.skippedTokens.length > 1 ? '.' : '.'}
                 </p>
               ) : null}
                 </>

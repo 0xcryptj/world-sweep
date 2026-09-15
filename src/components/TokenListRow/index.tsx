@@ -32,6 +32,7 @@ type TokenListRowProps = {
   accessory?: ReactNode;
   className?: string;
   style?: CSSProperties;
+  detail?: string;
   wldUsd?: number | null;
 };
 
@@ -46,6 +47,7 @@ export function TokenListRow({
   className,
   style,
   wldUsd,
+  detail,
 }: TokenListRowProps) {
   const usd = formatTokenUsd(tokenUsdValue(token, wldUsd));
   const change = formatPctChange(token.priceChange24h);
@@ -80,6 +82,11 @@ export function TokenListRow({
           ) : null}
         </div>
         <p className="forager-wallet-qty truncate">{token.balanceFormatted}</p>
+        {detail ? (
+          <p className="truncate text-[12px] leading-snug text-forager-text-muted">
+            {detail}
+          </p>
+        ) : null}
       </div>
       <div className="shrink-0 text-right">
         <p className="forager-wallet-usd">{usd || '—'}</p>
