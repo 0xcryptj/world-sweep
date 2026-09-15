@@ -3,6 +3,8 @@ type IosIconName =
   | 'wallet'
   | 'user'
   | 'swap'
+  | 'send'
+  | 'receive'
   | 'coin'
   | 'check'
   | 'chevron'
@@ -99,6 +101,24 @@ export function IosIcon({
       {name === 'swap' ? (
         <path
           d="M7.2 8.2h9.1m0 0-2.6-2.6m2.6 2.6-2.6 2.6M16.8 15.8H7.7m0 0 2.6 2.6M7.7 15.8l2.6-2.6"
+          stroke="currentColor"
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      ) : null}
+      {name === 'send' ? (
+        <path
+          d="M12 19.2V5.6m0 0-5.1 5.1M12 5.6l5.1 5.1"
+          stroke="currentColor"
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      ) : null}
+      {name === 'receive' ? (
+        <path
+          d="M12 4.8v13.6m0 0 5.1-5.1M12 18.4 6.9 13.3"
           stroke="currentColor"
           strokeWidth={stroke}
           strokeLinecap="round"

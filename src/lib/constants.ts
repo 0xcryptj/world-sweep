@@ -62,7 +62,8 @@ export const UNISWAP_APPROVAL_SWAP =
 export const PERMIT2_ADDRESS =
   '0x000000000022D473030F116dDEE9F6B43aC78BA3' as const;
 
-export const PLATFORM_FEE_BPS = 500; // 5%
+export const PLATFORM_FEE_BPS = 80; // 0.8% of quoted WLD out
+export const PLATFORM_FEE_LABEL = `${(PLATFORM_FEE_BPS / 100).toFixed(1)}%`;
 
 export const PLATFORM_FEE_WALLET =
   process.env.NEXT_PUBLIC_PLATFORM_FEE_WALLET ?? '';

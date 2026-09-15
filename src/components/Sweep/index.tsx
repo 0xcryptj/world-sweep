@@ -42,7 +42,12 @@ import { useSession } from 'next-auth/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPublicClient, http } from 'viem';
 import { worldchain } from 'viem/chains';
-import { RPC_URL, WORLD_CHAIN_ID, MAX_TOKENS_PER_SWEEP } from '@/lib/constants';
+import {
+  RPC_URL,
+  WORLD_CHAIN_ID,
+  MAX_TOKENS_PER_SWEEP,
+  PLATFORM_FEE_LABEL,
+} from '@/lib/constants';
 
 type SweepState = 'idle' | 'loading-tokens' | 'ready' | 'building' | 'pending';
 
@@ -1383,6 +1388,7 @@ export function Sweep() {
         ) : null}
 
         {growthStep === 'idle' ? (
+          <>
           <LiveFeedback
             label={{
               failed: failureLabel,
@@ -1413,6 +1419,14 @@ export function Sweep() {
               {forageButtonLabel}
             </ForagerButton>
           </LiveFeedback>
+          {canForage ||
+          submitPhase === 'simulating' ||
+          submitPhase === 'confirming' ? (
+            <p className="mt-2 text-center text-[12px] text-forager-text-muted">
+              Includes {PLATFORM_FEE_LABEL} platform fee
+            </p>
+          ) : null}
+          </>
         ) : null}
       </div>
     </div>

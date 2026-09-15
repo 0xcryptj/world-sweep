@@ -7,7 +7,7 @@ import { ShineBorder } from '@/components/ui/shine-border';
 import { TokenListRow } from '@/components/TokenListRow';
 import { apiPath } from '@/lib/base-path';
 import { FetchTimeoutError, fetchWithTimeout } from '@/lib/fetch-with-timeout';
-import { hapticImpact, hapticNotification, hapticSelection } from '@/lib/haptics';
+import { hapticImpact, hapticNotification } from '@/lib/haptics';
 import { useLocalFiat, wldAmountToFiat } from '@/lib/use-wld-price';
 import {
   requestWalletRefresh,
@@ -40,7 +40,6 @@ export function WalletPanel() {
   const [loading, setLoading] = useState(true);
   const [loadingBalance, setLoadingBalance] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
   const hasDataRef = useRef(false);
 
   const walletAddress =
@@ -157,22 +156,6 @@ export function WalletPanel() {
     [data?.tokens, forageableAddressSet],
   );
 
-  const copyAddress = async () => {
-    if (!walletAddress) {
-      return;
-    }
-
-    void hapticSelection();
-    try {
-      await navigator.clipboard.writeText(walletAddress);
-      void hapticNotification('success');
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      void hapticNotification('error');
-    }
-  };
-
   if (!walletAddress) {
     return (
       <p className="forager-subtitle text-sm">
@@ -230,19 +213,9 @@ export function WalletPanel() {
           {data.wldSymbol}
           {wldFiatLabel ? ` · ${wldFiatLabel}` : ''}
         </p>
-        <button
-          type="button"
-          onClick={() => void copyAddress()}
-          aria-label="Copy wallet address"
-          className="mt-4 flex w-full items-center justify-between gap-3 rounded-full border border-white/10 bg-white/5 px-4 py-3 text-left text-[15px]"
-        >
-          <span className="truncate text-forager-text-muted">
-            {username || 'World App wallet'}
-          </span>
-          <span className="shrink-0 font-medium text-forager-accent">
-            {copied ? 'Copied' : 'Copy'}
-          </span>
-        </button>
+        {username ? (
+          <p className="mt-1 text-[13px] text-forager-text-muted">{username}</p>
+        ) : null}
         <WalletActions
           walletAddress={walletAddress}
           wldBalance={data.wldBalance}

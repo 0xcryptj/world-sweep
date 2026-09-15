@@ -9,7 +9,7 @@ export const APP_TAGLINE = 'Turn leftover World Chain tokens into WLD.';
 export const APP_SIGNIN_TAGLINE = 'Turn leftover tokens into WLD.';
 
 export const APP_DESCRIPTION =
-  'Forager finds leftover World Chain tokens that still have liquidity, then batches them into one swap back to WLD. You pick what to forage, preview the route and fee, and approve in World App.';
+  'Forager finds leftover World Chain tokens that still have liquidity, then batches them into one swap back to WLD. You pick what to forage, preview the Uniswap route, and approve in World App.';
 
 /** Store listing copy — apply in Developer Portal after review unlocks edits. */
 export const STORE_LISTING_COPY = {
@@ -17,7 +17,7 @@ export const STORE_LISTING_COPY = {
   worldAppButtonText: 'Forage junk',
   descriptionOverview: APP_DESCRIPTION,
   descriptionHowItWorks:
-    '1. Sign in with World App. 2. Forager scans your wallet for junk ERC-20s with real Uniswap liquidity to WLD. 3. Select tokens, preview estimated WLD (5% platform fee). 4. Approve the batched swap in World App.',
+    '1. Sign in with World App. 2. Forager scans your wallet for junk ERC-20s with real Uniswap liquidity to WLD. 3. Select tokens and preview estimated WLD. 4. Approve the batched swap in World App.',
   descriptionConnect:
     'Open Forager inside World App, connect your wallet, and forage whenever mini-app airdrops leave tokens sitting idle.',
 } as const;

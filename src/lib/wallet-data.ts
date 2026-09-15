@@ -456,6 +456,7 @@ async function runForageScan(
       balanceFormatted: formatBalanceKeepRaw(token, meta),
       priceUsd: meta.priceUsd ?? token.priceUsd,
       priceChange24h: meta.priceChange24h ?? token.priceChange24h,
+      liquidityUsd: meta.liquidityUsd ?? token.liquidityUsd,
     };
   });
   let enrichedExcluded = excluded.map((token) => {

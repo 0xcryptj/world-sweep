@@ -170,9 +170,41 @@ function compareScanCandidates(a: WalletToken, b: WalletToken): number {
   return a.symbol.localeCompare(b.symbol);
 }
 
+function holdingQty(token: WalletToken): number {
+  const qty = Number(String(token.balanceFormatted).replace(/,/g, ''));
+  return Number.isFinite(qty) && qty > 0 ? qty : 0;
+}
+
 function hasSpendableUsd(token: WalletToken): boolean {
   const usd = tokenUsdValue(token);
-  return usd != null && usd >= 0.01;
+  if (usd != null && usd >= 0.01) {
+    return true;
+  }
+  // Wrong decimals can shrink qty so USD looks like dust while Dex has a price.
+  return (
+    typeof token.priceUsd === 'number' &&
+    token.priceUsd > 0 &&
+    holdingQty(token) > 0
+  );
+}
+
+function hasDexMarket(token: WalletToken): boolean {
+  if (typeof token.priceUsd === 'number' && token.priceUsd > 0) {
+    return true;
+  }
+  return typeof token.liquidityUsd === 'number' && token.liquidityUsd >= 1;
+}
+
+/** Allowlisted bag with a Dex/USD signal — must stay forageable even if the scan quote missed. */
+function isValuedHolding(token: WalletToken): boolean {
+  if (!isPermit2Allowlisted(token.address)) {
+    return false;
+  }
+  return (
+    hasSpendableUsd(token) ||
+    hasDexMarket(token) ||
+    knownLiquidSet.has(token.address.toLowerCase())
+  );
 }
 
 async function quoteTokenLiquidity(
@@ -200,7 +232,12 @@ async function quoteTokenLiquidity(
     skipRetry: false,
   });
   if (!route) {
-    return { route: null, reason: 'no_liquidity' };
+    // Dex/USD-valued bags are not "no Uniswap route" — the quoter missed or
+    // timed out. Keep them selectable and quote again at preview/build.
+    return {
+      route: null,
+      reason: isValuedHolding(token) ? 'scan_deferred' : 'no_liquidity',
+    };
   }
 
   const minWldOut = applySlippage(route.amountOut, SLIPPAGE_BPS);
@@ -355,43 +392,54 @@ export async function scanWalletForForage(
   const portalQueue: Array<{ address: string; symbol: string }> = [];
 
   for (const { token, route, reason } of quoteResults) {
-    const keepValued =
-      hasSpendableUsd(token) &&
-      isPermit2Allowlisted(token.address) &&
-      (reason === 'scan_deferred' ||
-        reason === 'no_liquidity' ||
-        reason === 'output_too_small' ||
-        !route);
-
-    if (reason === 'scan_deferred' && !keepValued) {
-      continue;
-    }
-    if (reason === 'allowlist_pending' && route) {
+    if (reason === 'allowlist_pending') {
       excluded.push(toExclusion(token, 'allowlist_pending'));
       portalQueue.push({ address: token.address, symbol: token.symbol });
       continue;
     }
-    if (keepValued) {
-      // Valued, but no confirmed WLD route yet — do not treat as forageable.
-      // That was selecting 5 bags and silently shipping 3.
-      excluded.push(
-        toExclusion(
-          token,
-          reason === 'output_too_small' ? 'output_too_small' : 'scan_deferred',
-        ),
-      );
+    if (route) {
+      swappable.push({
+        ...token,
+        cachedRoute: serializeRoute(route),
+      });
       portalQueue.push({ address: token.address, symbol: token.symbol });
       continue;
     }
-    if (reason || !route) {
-      if (reason) {
-        excluded.push(toExclusion(token, reason));
-      }
+    if (reason === 'output_too_small') {
+      excluded.push(toExclusion(token, 'output_too_small'));
+      continue;
+    }
+    if (isValuedHolding(token)) {
+      // Keep Dex-valued bags forageable without a cached route. Preview/build
+      // will quote Uniswap V3 again instead of dumping them as "no route".
+      swappable.push({
+        ...token,
+        cachedRoute: null,
+      });
+      portalQueue.push({ address: token.address, symbol: token.symbol });
+      continue;
+    }
+    if (reason === 'scan_deferred') {
+      continue;
+    }
+    if (reason) {
+      excluded.push(toExclusion(token, reason));
+    }
+  }
+
+  const scannedAddresses = new Set(
+    quoteResults.map((result) => result.token.address.toLowerCase()),
+  );
+  for (const token of candidates) {
+    if (scannedAddresses.has(token.address.toLowerCase())) {
+      continue;
+    }
+    if (!isValuedHolding(token)) {
       continue;
     }
     swappable.push({
       ...token,
-      cachedRoute: serializeRoute(route),
+      cachedRoute: null,
     });
     portalQueue.push({ address: token.address, symbol: token.symbol });
   }

@@ -8,6 +8,8 @@ export type WalletToken = {
   logoUrl?: string | null;
   /** USD spot from DexScreener — display only, never a swap input. */
   priceUsd?: number | null;
+  /** Dex pair liquidity in USD — market signal, never a swap input. */
+  liquidityUsd?: number | null;
   /** 24h percent change from DexScreener — display only. */
   priceChange24h?: number | null;
   /** Serialized Uniswap route from the full liquidity scan. */

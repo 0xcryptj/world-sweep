@@ -1,6 +1,6 @@
 /**
  * Live check of the production /api/build-sweep fee math:
- * platformFeeWld must equal PLATFORM_FEE_BPS (5%) of the sum of the *quoted*
+ * platformFeeWld must equal PLATFORM_FEE_BPS (0.8%) of the sum of the *quoted*
  * outputs, and the final transaction must be the WLD transfer of exactly that
  * amount to the platform fee wallet.
  *
@@ -11,7 +11,7 @@ import { decodeFunctionData, formatUnits, getAddress, parseAbi } from 'viem';
 const BASE = 'https://forag3r.app/world/api';
 const WLD = '0x2cFc85d8E48F8EAB294be644d9E25C3030863003';
 const FEE_WALLET = '0xE91A0B039159D3a50e65d337255FE0169B548260';
-const FEE_BPS = 500n;
+const FEE_BPS = 80n;
 
 const wallet = getAddress(
   process.argv[2] ?? '0xE91A0B039159D3a50e65d337255FE0169B548260',
@@ -49,12 +49,12 @@ console.log(`quotes: ${plan.quotes.length}, txs: ${plan.transactions.length}`);
 console.log(`sum(quoted amountOut): ${formatUnits(quotedSum, 18)} WLD`);
 console.log(`sum(minWldOut):        ${formatUnits(minSum, 18)} WLD (estimatedWldTotal=${formatUnits(BigInt(plan.estimatedWldTotal), 18)})`);
 console.log(`platformFeeWld:        ${formatUnits(BigInt(plan.platformFeeWld), 18)} WLD`);
-console.log(`expected 5% of quotes: ${formatUnits(expectedFee, 18)} WLD`);
+console.log(`expected 0.8% of quotes: ${formatUnits(expectedFee, 18)} WLD`);
 console.log(`userReceivesWld:       ${formatUnits(BigInt(plan.userReceivesWld), 18)} WLD`);
 
 let ok = true;
 if (BigInt(plan.platformFeeWld) !== expectedFee) {
-  console.log('FAIL: platformFeeWld != 5% of quoted sum');
+  console.log('FAIL: platformFeeWld != 0.8% of quoted sum');
   ok = false;
 }
 if (BigInt(plan.estimatedWldTotal) !== minSum) {
@@ -86,7 +86,7 @@ if (getAddress(last.to) !== getAddress(WLD)) {
     ok = false;
   }
   if (amount !== expectedFee) {
-    console.log('FAIL: on-chain fee amount != expected 5% of quotes');
+    console.log('FAIL: on-chain fee amount != expected 0.8% of quotes');
     ok = false;
   }
 }

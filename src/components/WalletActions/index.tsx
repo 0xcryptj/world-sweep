@@ -1,22 +1,25 @@
 'use client';
 
 import { ForagerButton } from '@/components/ForagerButton';
+import { IosIcon } from '@/components/IosIcon';
 import { TokenIcon } from '@/components/Sweep/TokenIcon';
 import { AnimatedWld } from '@/components/Sweep/AnimatedWld';
 import { apiPath } from '@/lib/base-path';
 import {
-  PLATFORM_FEE_BPS,
+  PLATFORM_FEE_LABEL,
   WLD_ADDRESS,
   WORLD_CHAIN_ID,
 } from '@/lib/constants';
 import { fetchWithTimeout } from '@/lib/fetch-with-timeout';
 import { hapticImpact, hapticNotification, hapticSelection } from '@/lib/haptics';
 import { sendMiniKitTransaction } from '@/lib/minikit-transaction';
+import { getTokenExclusionReason } from '@/lib/token-filters';
 import type { BuildSweepResponse, WalletToken } from '@/lib/types';
 import { requestWalletRefresh } from '@/lib/wallet-refresh';
 import { erc20Abi } from '@/lib/abis';
 import { encodeFunctionData, isAddress, parseUnits } from 'viem';
 import { useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 type Sheet = 'send' | 'receive' | 'swap' | null;
 
@@ -27,10 +30,42 @@ type WalletActionsProps = {
   forageableTokens: WalletToken[];
 };
 
-const feePercent = PLATFORM_FEE_BPS / 100;
-
 function qrSrc(address: string) {
-  return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&color=ffffff&bgcolor=111111&data=${encodeURIComponent(address)}`;
+  return `https://api.qrserver.com/v1/create-qr-code/?size=280x280&margin=12&qzone=2&ecc=M&color=000000&bgcolor=ffffff&format=png&data=${encodeURIComponent(address)}`;
+}
+
+function TokenPickRow({
+  token,
+  selected,
+  onSelect,
+}: {
+  token: WalletToken;
+  selected: boolean;
+  onSelect: (address: string) => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={`forager-token-pick${selected ? ' is-selected' : ''}`}
+      onClick={() => onSelect(token.address)}
+    >
+      <TokenIcon
+        address={token.address}
+        symbol={token.symbol}
+        logoUrl={token.logoUrl}
+        size="sm"
+      />
+      <span className="min-w-0 flex-1 text-left">
+        <span className="block truncate text-[15px] font-medium">
+          {token.symbol}
+        </span>
+        <span className="block truncate text-[12px] text-forager-text-muted">
+          {token.balanceFormatted}
+        </span>
+      </span>
+      {selected ? <IosIcon name="check" size={16} /> : null}
+    </button>
+  );
 }
 
 export function WalletActions({
@@ -57,9 +92,13 @@ export function WalletActions({
     const wld = tokens.find(
       (token) => token.address.toLowerCase() === WLD_ADDRESS.toLowerCase(),
     );
-    const rest = tokens.filter(
-      (token) => token.address.toLowerCase() !== WLD_ADDRESS.toLowerCase(),
-    );
+    const rest = tokens.filter((token) => {
+      if (token.address.toLowerCase() === WLD_ADDRESS.toLowerCase()) {
+        return false;
+      }
+      const reason = getTokenExclusionReason(token);
+      return reason !== 'protected' && reason !== 'staked_re';
+    });
     if (wld) {
       return [wld, ...rest];
     }
@@ -76,21 +115,42 @@ export function WalletActions({
     ];
   }, [tokens, wldBalance]);
 
+  const swapChoices = useMemo(() => {
+    const fromForageable = forageableTokens.filter(
+      (token) => token.address.toLowerCase() !== WLD_ADDRESS.toLowerCase(),
+    );
+    if (fromForageable.length > 0) {
+      return fromForageable;
+    }
+    return tokens.filter((token) => {
+      if (token.address.toLowerCase() === WLD_ADDRESS.toLowerCase()) {
+        return false;
+      }
+      const reason = getTokenExclusionReason(token);
+      return (
+        reason !== 'protected' &&
+        reason !== 'staked_re' &&
+        reason !== 'malicious' &&
+        reason !== 'zero_balance'
+      );
+    });
+  }, [forageableTokens, tokens]);
+
   const activeSend = sendChoices.find(
     (token) => token.address.toLowerCase() === sendToken.toLowerCase(),
   );
   const activeSwap =
-    forageableTokens.find(
+    swapChoices.find(
       (token) => token.address.toLowerCase() === swapToken.toLowerCase(),
-    ) ?? forageableTokens[0];
+    ) ?? swapChoices[0];
 
   const open = (next: Sheet) => {
     void hapticSelection();
     setError(null);
     setSwapPlan(null);
     setSheet(next);
-    if (next === 'swap' && forageableTokens[0]) {
-      setSwapToken(forageableTokens[0].address);
+    if (next === 'swap' && swapChoices[0]) {
+      setSwapToken(swapChoices[0].address);
     }
   };
 
@@ -185,7 +245,7 @@ export function WalletActions({
       if (payload.quotes.length === 0) {
         throw new Error(
           payload.skippedTokens[0]?.reason ??
-            'No WLD route for this token right now.',
+            'No Uniswap route to WLD for this token right now.',
         );
       }
       setSwapPlan(payload);
@@ -228,188 +288,232 @@ export function WalletActions({
     }
   };
 
+  const sheetTitle =
+    sheet === 'send' ? 'Send' : sheet === 'receive' ? 'Receive' : 'Swap to WLD';
+
+  const sheetCard =
+    sheet && typeof document !== 'undefined'
+      ? createPortal(
+          <div
+            className="forager-sheet"
+            role="dialog"
+            aria-modal
+            aria-label={sheetTitle}
+            onClick={() => setSheet(null)}
+          >
+            <div
+              className="forager-sheet-card"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <p className="forager-title text-[17px]">{sheetTitle}</p>
+                <button
+                  type="button"
+                  className="forager-text-action"
+                  onClick={() => setSheet(null)}
+                >
+                  Close
+                </button>
+              </div>
+
+              {sheet === 'receive' ? (
+                <div className="flex flex-col items-center gap-4 text-center">
+                  <div className="forager-qr-card">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={qrSrc(walletAddress)}
+                      alt="Wallet QR code"
+                      width={280}
+                      height={280}
+                    />
+                  </div>
+                  <p className="break-all text-[13px] leading-snug text-forager-text-muted">
+                    {walletAddress}
+                  </p>
+                  <ForagerButton
+                    size="md"
+                    className="w-full"
+                    onClick={() => void copyAddress()}
+                  >
+                    {copied ? 'Copied' : 'Copy address'}
+                  </ForagerButton>
+                </div>
+              ) : null}
+
+              {sheet === 'send' ? (
+                <div className="space-y-3">
+                  <p className="text-[13px] text-forager-text-muted">Token</p>
+                  <div className="forager-token-pick-list">
+                    {sendChoices.map((token) => (
+                      <TokenPickRow
+                        key={token.address}
+                        token={token}
+                        selected={
+                          token.address.toLowerCase() === sendToken.toLowerCase()
+                        }
+                        onSelect={(address) => setSendToken(address)}
+                      />
+                    ))}
+                  </div>
+                  <label className="block text-[13px] text-forager-text-muted">
+                    Amount
+                    <input
+                      className="forager-field mt-1"
+                      inputMode="decimal"
+                      value={sendAmount}
+                      onChange={(event) => setSendAmount(event.target.value)}
+                      placeholder="0.00"
+                    />
+                  </label>
+                  <label className="block text-[13px] text-forager-text-muted">
+                    To
+                    <input
+                      className="forager-field mt-1"
+                      value={sendTo}
+                      onChange={(event) => setSendTo(event.target.value)}
+                      placeholder="0x…"
+                      autoComplete="off"
+                      spellCheck={false}
+                    />
+                  </label>
+                  <ForagerButton
+                    size="md"
+                    className="w-full"
+                    disabled={busy}
+                    onClick={() => void send()}
+                  >
+                    {busy
+                      ? 'Opening World App…'
+                      : `Send ${activeSend?.symbol ?? ''}`}
+                  </ForagerButton>
+                </div>
+              ) : null}
+
+              {sheet === 'swap' ? (
+                <div className="space-y-3">
+                  {swapChoices.length === 0 ? (
+                    <p className="forager-subtitle text-[15px] leading-snug">
+                      No leftover tokens to swap right now. Scan on Home first.
+                    </p>
+                  ) : (
+                    <>
+                      <p className="text-[13px] text-forager-text-muted">From</p>
+                      <div className="forager-token-pick-list">
+                        {swapChoices.map((token) => (
+                          <TokenPickRow
+                            key={token.address}
+                            token={token}
+                            selected={
+                              token.address.toLowerCase() ===
+                              (activeSwap?.address ?? '').toLowerCase()
+                            }
+                            onSelect={(address) => {
+                              setSwapToken(address);
+                              setSwapPlan(null);
+                              setError(null);
+                            }}
+                          />
+                        ))}
+                      </div>
+                      {activeSwap ? (
+                        <div className="flex items-center gap-3 rounded-[12px] bg-white/5 px-3 py-2">
+                          <TokenIcon
+                            address={WLD_ADDRESS}
+                            symbol="WLD"
+                            size="sm"
+                          />
+                          <p className="text-[15px]">To WLD via Uniswap</p>
+                        </div>
+                      ) : null}
+                      {swapPlan ? (
+                        <div className="space-y-1">
+                          <p className="text-[13px] text-forager-text-muted">
+                            You receive
+                          </p>
+                          <AnimatedWld
+                            amountWei={swapPlan.userReceivesWld}
+                            className="forager-value-green text-[22px] font-semibold"
+                          />
+                        </div>
+                      ) : null}
+                      <ForagerButton
+                        size="md"
+                        className="w-full"
+                        disabled={busy || !activeSwap}
+                        onClick={() => {
+                          if (swapPlan) {
+                            void confirmSwap();
+                            return;
+                          }
+                          if (activeSwap) {
+                            void quoteSwap(activeSwap);
+                          }
+                        }}
+                      >
+                        {busy
+                          ? swapPlan
+                            ? 'Opening World App…'
+                            : 'Quoting Uniswap…'
+                          : swapPlan
+                            ? 'Swap in World App'
+                            : 'Preview swap'}
+                      </ForagerButton>
+                      {swapPlan ? (
+                        <p className="text-center text-[12px] text-forager-text-muted">
+                          Includes {PLATFORM_FEE_LABEL} platform fee
+                        </p>
+                      ) : null}
+                    </>
+                  )}
+                </div>
+              ) : null}
+
+              {error ? (
+                <p className="mt-3 text-[13px] leading-snug text-red-300">
+                  {error}
+                </p>
+              ) : null}
+            </div>
+          </div>,
+          document.body,
+        )
+      : null;
+
   return (
     <>
       <div className="forager-wallet-actions">
-        <ForagerButton variant="secondary" size="sm" onClick={() => open('send')}>
+        <button
+          type="button"
+          className="forager-wallet-action"
+          onClick={() => open('send')}
+        >
+          <span className="forager-wallet-action-icon">
+            <IosIcon name="send" size={22} />
+          </span>
           Send
-        </ForagerButton>
-        <ForagerButton
-          variant="secondary"
-          size="sm"
+        </button>
+        <button
+          type="button"
+          className="forager-wallet-action"
           onClick={() => open('receive')}
         >
+          <span className="forager-wallet-action-icon">
+            <IosIcon name="receive" size={22} />
+          </span>
           Receive
-        </ForagerButton>
-        <ForagerButton variant="secondary" size="sm" onClick={() => open('swap')}>
+        </button>
+        <button
+          type="button"
+          className="forager-wallet-action"
+          onClick={() => open('swap')}
+        >
+          <span className="forager-wallet-action-icon">
+            <IosIcon name="swap" size={22} />
+          </span>
           Swap
-        </ForagerButton>
+        </button>
       </div>
-
-      {sheet ? (
-        <div className="forager-sheet" role="dialog" aria-modal>
-          <div className="forager-sheet-card">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <p className="forager-title text-[17px] capitalize">{sheet}</p>
-              <button
-                type="button"
-                className="forager-text-action"
-                onClick={() => setSheet(null)}
-              >
-                Close
-              </button>
-            </div>
-
-            {sheet === 'receive' ? (
-              <div className="flex flex-col items-center gap-4 text-center">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={qrSrc(walletAddress)}
-                  alt="Wallet QR code"
-                  width={200}
-                  height={200}
-                  className="rounded-[14px] border border-white/10"
-                />
-                <p className="break-all text-[13px] text-forager-text-muted">
-                  {walletAddress}
-                </p>
-                <ForagerButton size="md" className="w-full" onClick={() => void copyAddress()}>
-                  {copied ? 'Copied' : 'Copy address'}
-                </ForagerButton>
-              </div>
-            ) : null}
-
-            {sheet === 'send' ? (
-              <div className="space-y-3">
-                <label className="block text-[13px] text-forager-text-muted">
-                  Token
-                  <select
-                    className="forager-field mt-1"
-                    value={sendToken}
-                    onChange={(event) => setSendToken(event.target.value)}
-                  >
-                    {sendChoices.map((token) => (
-                      <option key={token.address} value={token.address}>
-                        {token.symbol} · {token.balanceFormatted}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="block text-[13px] text-forager-text-muted">
-                  Amount
-                  <input
-                    className="forager-field mt-1"
-                    inputMode="decimal"
-                    value={sendAmount}
-                    onChange={(event) => setSendAmount(event.target.value)}
-                    placeholder="0.00"
-                  />
-                </label>
-                <label className="block text-[13px] text-forager-text-muted">
-                  To
-                  <input
-                    className="forager-field mt-1"
-                    value={sendTo}
-                    onChange={(event) => setSendTo(event.target.value)}
-                    placeholder="0x…"
-                    autoComplete="off"
-                    spellCheck={false}
-                  />
-                </label>
-                <ForagerButton
-                  size="md"
-                  className="w-full"
-                  disabled={busy}
-                  onClick={() => void send()}
-                >
-                  {busy ? 'Opening World App…' : `Send ${activeSend?.symbol ?? ''}`}
-                </ForagerButton>
-              </div>
-            ) : null}
-
-            {sheet === 'swap' ? (
-              <div className="space-y-3">
-                {forageableTokens.length === 0 ? (
-                  <p className="forager-subtitle text-[15px] leading-snug">
-                    No forageable leftover tokens right now. Scan on Home first,
-                    then swap to WLD here. A {feePercent}% platform fee applies.
-                  </p>
-                ) : (
-                  <>
-                    <label className="block text-[13px] text-forager-text-muted">
-                      From
-                      <select
-                        className="forager-field mt-1"
-                        value={activeSwap?.address ?? ''}
-                        onChange={(event) => {
-                          setSwapToken(event.target.value);
-                          setSwapPlan(null);
-                        }}
-                      >
-                        {forageableTokens.map((token) => (
-                          <option key={token.address} value={token.address}>
-                            {token.symbol} · {token.balanceFormatted}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <p className="text-[13px] text-forager-text-muted">
-                      Swaps leftover tokens to WLD. {feePercent}% platform fee
-                      is taken from the quoted output.
-                    </p>
-                    {activeSwap ? (
-                      <div className="flex items-center gap-3 rounded-[12px] bg-white/5 px-3 py-2">
-                        <TokenIcon
-                          address={activeSwap.address}
-                          symbol={activeSwap.symbol}
-                          logoUrl={activeSwap.logoUrl}
-                          size="sm"
-                        />
-                        <p className="text-[15px]">To WLD</p>
-                      </div>
-                    ) : null}
-                    {swapPlan ? (
-                      <div className="space-y-1">
-                        <p className="text-[13px] text-forager-text-muted">
-                          You receive after {feePercent}% fee
-                        </p>
-                        <AnimatedWld
-                          amountWei={swapPlan.userReceivesWld}
-                          className="forager-value-green text-[22px] font-semibold"
-                        />
-                      </div>
-                    ) : null}
-                    <ForagerButton
-                      size="md"
-                      className="w-full"
-                      disabled={busy || !activeSwap}
-                      onClick={() => {
-                        if (swapPlan) {
-                          void confirmSwap();
-                          return;
-                        }
-                        if (activeSwap) {
-                          void quoteSwap(activeSwap);
-                        }
-                      }}
-                    >
-                      {busy
-                        ? 'Working…'
-                        : swapPlan
-                          ? 'Swap in World App'
-                          : 'Preview swap'}
-                    </ForagerButton>
-                  </>
-                )}
-              </div>
-            ) : null}
-
-            {error ? (
-              <p className="mt-3 text-[13px] leading-snug text-red-300">{error}</p>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
+      {sheetCard}
     </>
   );
 }

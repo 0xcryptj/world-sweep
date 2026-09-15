@@ -69,6 +69,11 @@ async function fetchDexScreenerV1ImageUrl(address: string): Promise<string | nul
   return ranked[0]?.info?.imageUrl?.trim() || null;
 }
 
+function isWorldChainPair(chainId: string | undefined): boolean {
+  const value = chainId?.toLowerCase() ?? '';
+  return value === 'worldchain' || value === 'world-chain' || value === '480';
+}
+
 async function fetchDexScreenerImageUrl(address: string): Promise<string | null> {
   const json = (await fetchJson(
     `https://api.dexscreener.com/latest/dex/tokens/${address}`,
@@ -77,23 +82,71 @@ async function fetchDexScreenerImageUrl(address: string): Promise<string | null>
       chainId?: string;
       baseToken?: { address?: string };
       info?: { imageUrl?: string };
+      liquidity?: { usd?: number };
     }> | null;
   } | null;
 
   const lower = address.toLowerCase();
-  const pair = json?.pairs?.find(
-    (p) =>
-      p?.chainId === 'worldchain' &&
-      p?.info?.imageUrl &&
-      p?.baseToken?.address?.toLowerCase() === lower,
-  );
-  return pair?.info?.imageUrl ?? null;
+  const ranked = (json?.pairs ?? [])
+    .filter(
+      (pair) =>
+        isWorldChainPair(pair?.chainId) &&
+        Boolean(pair?.info?.imageUrl) &&
+        pair?.baseToken?.address?.toLowerCase() === lower,
+    )
+    .sort((a, b) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0));
+
+  return ranked[0]?.info?.imageUrl?.trim() || null;
+}
+
+async function fetchDexScreenerTokenPairsImageUrl(
+  address: string,
+): Promise<string | null> {
+  const json = (await fetchJson(
+    `https://api.dexscreener.com/token-pairs/v1/worldchain/${address.toLowerCase()}`,
+  )) as Array<{
+    baseToken?: { address?: string };
+    info?: { imageUrl?: string };
+    liquidity?: { usd?: number };
+  }> | null;
+
+  if (!Array.isArray(json)) {
+    return null;
+  }
+
+  const lower = address.toLowerCase();
+  const ranked = json
+    .filter(
+      (pair) =>
+        pair?.baseToken?.address?.toLowerCase() === lower &&
+        Boolean(pair?.info?.imageUrl),
+    )
+    .sort((a, b) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0));
+
+  return ranked[0]?.info?.imageUrl?.trim() || null;
 }
 
 /** GeckoTerminal token metadata (network slug for chain 480 is `world-chain`). */
 async function fetchGeckoTerminalImageUrl(address: string): Promise<string | null> {
   const json = (await fetchJson(
     `https://api.geckoterminal.com/api/v2/networks/world-chain/tokens/${address.toLowerCase()}`,
+  )) as {
+    data?: { attributes?: { image_url?: string | null; image_uri?: string | null } };
+  } | null;
+
+  const imageUrl =
+    json?.data?.attributes?.image_url ?? json?.data?.attributes?.image_uri;
+  if (!imageUrl || imageUrl === 'missing.png') {
+    return null;
+  }
+  return imageUrl;
+}
+
+async function fetchGeckoTerminalInfoImageUrl(
+  address: string,
+): Promise<string | null> {
+  const json = (await fetchJson(
+    `https://api.geckoterminal.com/api/v2/networks/world-chain/tokens/${address.toLowerCase()}/info`,
   )) as {
     data?: { attributes?: { image_url?: string | null } };
   } | null;
@@ -103,6 +156,14 @@ async function fetchGeckoTerminalImageUrl(address: string): Promise<string | nul
     return null;
   }
   return imageUrl;
+}
+
+function smolDappIconUrls(address: string): string[] {
+  const lower = address.toLowerCase();
+  return [
+    `https://cdn.jsdelivr.net/gh/SmolDapp/tokenAssets@master/tokens/480/${lower}/logo-128.png`,
+    `https://cdn.jsdelivr.net/gh/SmolDapp/tokenAssets@master/tokens/480/${lower}/logo.png`,
+  ];
 }
 
 /** World Chain Blockscout explorer; returns `icon_url` for CoinGecko-listed tokens. */
@@ -206,8 +267,10 @@ export async function GET(request: Request) {
 
     const metadataFetchers = [
       () => fetchDexScreenerV1ImageUrl(address),
+      () => fetchDexScreenerTokenPairsImageUrl(address),
       () => fetchDexScreenerImageUrl(address),
       () => fetchGeckoTerminalImageUrl(address),
+      () => fetchGeckoTerminalInfoImageUrl(address),
       () => fetchCoinGeckoImageUrl(address),
       () => fetchBlockscoutImageUrl(address),
       () => fetchAlchemyTokenMetadata(address).then((m) => m?.logo ?? null),
@@ -226,8 +289,18 @@ export async function GET(request: Request) {
       }
     }
 
-    const cdn = normalizeTokenLogoUrl(getDexScreenerTokenIconUrl(addressLower));
-    if (cdn && !seen.has(cdn)) {
+    const cdnCandidates = [
+      getDexScreenerTokenIconUrl(addressLower),
+      ...smolDappIconUrls(addressLower),
+    ]
+      .map((url) => normalizeTokenLogoUrl(url))
+      .filter((url): url is string => Boolean(url));
+
+    for (const cdn of cdnCandidates) {
+      if (seen.has(cdn)) {
+        continue;
+      }
+      seen.add(cdn);
       const proxied = await proxyImageUrl(cdn);
       if (proxied) {
         return proxied;

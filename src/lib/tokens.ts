@@ -293,6 +293,7 @@ async function fetchDexScreenerTokenMetaBatch(
       const pairs = (await response.json()) as Array<{
         chainId?: string;
         baseToken?: { address?: string; name?: string; symbol?: string };
+        quoteToken?: { address?: string; name?: string; symbol?: string };
         info?: { imageUrl?: string };
         liquidity?: { usd?: number };
         priceUsd?: string | number;
@@ -301,34 +302,57 @@ async function fetchDexScreenerTokenMetaBatch(
 
       for (const pair of pairs ?? []) {
         const addr = pair.baseToken?.address?.toLowerCase();
-        if (!addr || !chunk.includes(addr)) {
-          continue;
+        const quoteAddr = pair.quoteToken?.address?.toLowerCase();
+        const liq =
+          typeof pair.liquidity?.usd === 'number' ? pair.liquidity.usd : 0;
+        if (addr && chunk.includes(addr)) {
+          const parsedPrice =
+            typeof pair.priceUsd === 'number'
+              ? pair.priceUsd
+              : typeof pair.priceUsd === 'string'
+                ? Number(pair.priceUsd)
+                : NaN;
+          const next: MarketTokenMeta = {
+            symbol: pair.baseToken?.symbol?.trim() || undefined,
+            name: pair.baseToken?.name?.trim() || undefined,
+            logoUrl: pair.info?.imageUrl?.trim() || null,
+            priceUsd:
+              Number.isFinite(parsedPrice) && parsedPrice > 0
+                ? parsedPrice
+                : null,
+            priceChange24h:
+              typeof pair.priceChange?.h24 === 'number' &&
+              Number.isFinite(pair.priceChange.h24)
+                ? pair.priceChange.h24
+                : null,
+            liquidityUsd: liq,
+          };
+          const existing = result.get(addr);
+          if (
+            !existing ||
+            (next.liquidityUsd ?? 0) > (existing.liquidityUsd ?? 0)
+          ) {
+            result.set(addr, { ...existing, ...next });
+          }
         }
-        const parsedPrice =
-          typeof pair.priceUsd === 'number'
-            ? pair.priceUsd
-            : typeof pair.priceUsd === 'string'
-              ? Number(pair.priceUsd)
-              : NaN;
-        const next: MarketTokenMeta = {
-          symbol: pair.baseToken?.symbol?.trim() || undefined,
-          name: pair.baseToken?.name?.trim() || undefined,
-          logoUrl: pair.info?.imageUrl?.trim() || null,
-          priceUsd: Number.isFinite(parsedPrice) && parsedPrice > 0 ? parsedPrice : null,
-          priceChange24h:
-            typeof pair.priceChange?.h24 === 'number' &&
-            Number.isFinite(pair.priceChange.h24)
-              ? pair.priceChange.h24
-              : null,
-          liquidityUsd:
-            typeof pair.liquidity?.usd === 'number' ? pair.liquidity.usd : 0,
-        };
-        const existing = result.get(addr);
+
+        // Quote-side holdings still have a Dex market even when they aren't
+        // the pair's base token — keep liquidity so scan doesn't dump them.
         if (
-          !existing ||
-          (next.liquidityUsd ?? 0) > (existing.liquidityUsd ?? 0)
+          quoteAddr &&
+          quoteAddr !== addr &&
+          chunk.includes(quoteAddr)
         ) {
-          result.set(addr, { ...existing, ...next });
+          const existingQuote = result.get(quoteAddr);
+          if (!existingQuote || liq > (existingQuote.liquidityUsd ?? 0)) {
+            result.set(quoteAddr, {
+              ...existingQuote,
+              symbol:
+                pair.quoteToken?.symbol?.trim() || existingQuote?.symbol,
+              name: pair.quoteToken?.name?.trim() || existingQuote?.name,
+              liquidityUsd: Math.max(liq, existingQuote?.liquidityUsd ?? 0),
+            });
+          }
         }
       }
     } catch {
@@ -522,6 +546,7 @@ function applyMarketQuote(
     ...token,
     priceUsd: market.priceUsd ?? token.priceUsd ?? null,
     priceChange24h: market.priceChange24h ?? token.priceChange24h ?? null,
+    liquidityUsd: market.liquidityUsd ?? token.liquidityUsd ?? null,
   };
 }
 

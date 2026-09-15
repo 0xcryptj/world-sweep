@@ -99,6 +99,10 @@ export function getTokenIconSources(
     sources.push(normalizedLogo);
   }
 
+  sources.push(
+    `https://cdn.jsdelivr.net/gh/SmolDapp/tokenAssets@master/tokens/480/${address}/logo-128.png`,
+  );
+
   return [...new Set(sources)];
 }
 
