@@ -22,12 +22,19 @@ export const USDC_ADDRESS =
 export const WBTC_ADDRESS =
   '0x03c7054bcb39f7b2e5b2c7acb37583e32d70cfa3' as const;
 
-export const PROTECTED_TOKEN_ADDRESSES = new Set([
+/**
+ * Canonical assets permitted in the Wallet tab. Verification is address-based,
+ * never inferred from token metadata, logos, prices, or user-supplied symbols.
+ */
+export const VERIFIED_WALLET_TOKEN_ADDRESSES = new Set([
   WLD_ADDRESS.toLowerCase(),
   WETH_ADDRESS.toLowerCase(),
   USDC_ADDRESS.toLowerCase(),
   WBTC_ADDRESS.toLowerCase(),
 ]);
+
+/** Assets that must never be treated as forageable leftovers. */
+export const PROTECTED_TOKEN_ADDRESSES = VERIFIED_WALLET_TOKEN_ADDRESSES;
 
 /**
  * World Chain tokens that are opted-in to being non-foragable regardless of

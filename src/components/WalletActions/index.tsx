@@ -95,8 +95,7 @@ export function WalletActions({
       if (token.address.toLowerCase() === WLD_ADDRESS.toLowerCase()) {
         return false;
       }
-      const reason = getTokenExclusionReason(token);
-      return reason !== 'protected' && reason !== 'staked_re';
+      return token.balance !== '0';
     });
     if (wld) {
       return [wld, ...rest];

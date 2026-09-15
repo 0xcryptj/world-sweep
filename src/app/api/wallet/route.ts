@@ -5,10 +5,12 @@ import {
   loadWldBalanceCached,
   peekForageScanCache,
 } from '@/lib/wallet-data';
-import { WLD_ADDRESS } from '@/lib/constants';
+import {
+  VERIFIED_WALLET_TOKEN_ADDRESSES,
+  WLD_ADDRESS,
+} from '@/lib/constants';
 import { sanitizeErrorMessage } from '@/lib/safe-error';
 import { clientKeyFromRequest, rateLimit } from '@/lib/rate-limit';
-import type { WalletToken } from '@/lib/types';
 import { NextResponse } from 'next/server';
 
 export const maxDuration = 30;
@@ -60,23 +62,12 @@ export async function GET(request: Request) {
     const wldResult = await loadWldBalanceCached(address);
 
     const cachedScan = peekForageScanCache(address);
-    const forageableByAddress = new Map<string, WalletToken>(
-      (cachedScan?.tokens ?? []).map((token) => [
-        token.address.toLowerCase(),
-        token,
-      ]),
+    // The Wallet tab is a trusted-asset surface, not the forage scanner.
+    // Filter by canonical contract address at the API boundary so spoofed
+    // symbols, logos, metadata, and unsolicited ERC-20s never reach the UI.
+    const tokens = holdingsResult.holdings.filter((token) =>
+      VERIFIED_WALLET_TOKEN_ADDRESSES.has(token.address.toLowerCase()),
     );
-    const pendingAllowlistAddresses = (cachedScan?.excluded ?? [])
-      .filter((token) => token.reason === 'allowlist_pending')
-      .map((token) => token.address.toLowerCase());
-
-    const tokens = holdingsResult.holdings.map((token) => {
-      const matched = forageableByAddress.get(token.address.toLowerCase());
-      if (!matched?.cachedRoute) {
-        return token;
-      }
-      return { ...token, cachedRoute: matched.cachedRoute };
-    });
 
     const wldFromList =
       tokens.find(
@@ -92,15 +83,14 @@ export async function GET(request: Request) {
     return NextResponse.json(
       {
         tokens,
-        forageableAddresses: [...forageableByAddress.keys()],
-        pendingAllowlistAddresses,
+        forageableAddresses: [],
         wldBalance:
           wldResult.value.balanceFormatted ||
           wldFromList?.balanceFormatted ||
           '0',
         wldSymbol: wldResult.value.symbol,
         tokenCount: tokens.length,
-        forageableCount: forageableByAddress.size,
+        forageableCount: 0,
       },
       {
         headers: {

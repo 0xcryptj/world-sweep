@@ -24,7 +24,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 type WalletResponse = {
   tokens: WalletToken[];
   forageableAddresses?: string[];
-  pendingAllowlistAddresses?: string[];
   wldBalance: string;
   wldSymbol: string;
   tokenCount: number;
@@ -136,16 +135,6 @@ export function WalletPanel() {
         ),
       ),
     [data?.forageableAddresses],
-  );
-
-  const pendingAllowlistSet = useMemo(
-    () =>
-      new Set(
-        (data?.pendingAllowlistAddresses ?? []).map((address) =>
-          address.toLowerCase(),
-        ),
-      ),
-    [data?.pendingAllowlistAddresses],
   );
 
   const forageableTokens = useMemo(
@@ -265,7 +254,7 @@ export function WalletPanel() {
             </p>
           ) : data.tokens.length === 0 ? (
             <p className="px-4 py-4 text-[15px] text-forager-text-muted">
-              No token balances found.
+              No verified token balances found.
             </p>
           ) : (
             data.tokens.map((token) => (
@@ -273,8 +262,7 @@ export function WalletPanel() {
                 key={token.address}
                 token={token}
                 disabled
-                verified={pendingAllowlistSet.has(token.address.toLowerCase())}
-                verifiedTone="pending"
+                verified
               />
             ))
           )}
