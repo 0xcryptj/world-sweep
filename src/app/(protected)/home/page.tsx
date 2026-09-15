@@ -11,7 +11,6 @@ export default async function HomePage() {
     <>
       <Page.Header className="shrink-0">
         <AppHeader
-          title="Forage"
           username={session?.user?.username}
           profilePictureUrl={session?.user?.profilePictureUrl}
         />

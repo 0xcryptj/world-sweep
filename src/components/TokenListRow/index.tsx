@@ -72,7 +72,6 @@ export function TokenListRow({
         address={token.address}
         symbol={token.symbol}
         logoUrl={token.logoUrl}
-        badge
       />
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-1.5">

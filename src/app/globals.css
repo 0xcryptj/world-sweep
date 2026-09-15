@@ -280,6 +280,7 @@ th {
 .forager-header {
   background: transparent;
   border-bottom: none;
+  overflow: visible;
 }
 
 .forager-footer {

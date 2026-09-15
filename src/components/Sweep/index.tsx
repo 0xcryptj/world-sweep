@@ -46,7 +46,6 @@ import {
   RPC_URL,
   WORLD_CHAIN_ID,
   MAX_TOKENS_PER_SWEEP,
-  PLATFORM_FEE_LABEL,
 } from '@/lib/constants';
 
 type SweepState = 'idle' | 'loading-tokens' | 'ready' | 'building' | 'pending';
@@ -357,12 +356,39 @@ export function Sweep() {
       const isRecentlyForaged = (address: string) =>
         recentlyForagedRef.current.has(address.toLowerCase());
 
-      const nextTokens = (payload.tokens ?? []).filter(
+      const incomingTokens = (payload.tokens ?? []).filter(
         (token) => !isRecentlyForaged(token.address),
       );
-      const nextExcluded = (payload.excluded ?? []).filter(
-        (token) => !isRecentlyForaged(token.address),
+      const nextTokens = incomingTokens.filter((token) =>
+        Boolean(token.cachedRoute),
       );
+      const stillChecking = incomingTokens.filter(
+        (token) => !token.cachedRoute,
+      );
+      const excludedByAddress = new Map<string, ExcludedToken>();
+      for (const token of (payload.excluded ?? []).filter(
+        (item) => !isRecentlyForaged(item.address),
+      )) {
+        excludedByAddress.set(token.address.toLowerCase(), token);
+      }
+      for (const token of stillChecking) {
+        const key = token.address.toLowerCase();
+        if (excludedByAddress.has(key)) {
+          continue;
+        }
+        excludedByAddress.set(key, {
+          address: token.address,
+          symbol: token.symbol,
+          name: token.name,
+          balanceFormatted: token.balanceFormatted,
+          logoUrl: token.logoUrl,
+          priceUsd: token.priceUsd,
+          priceChange24h: token.priceChange24h,
+          reason: 'scan_deferred',
+          reasonLabel: 'Still checking WLD route…',
+        });
+      }
+      const nextExcluded = [...excludedByAddress.values()];
       setTokens(nextTokens);
       setExcludedTokens(nextExcluded);
       // Preserve the user's current picks across fast→full scan refreshes.
@@ -599,9 +625,32 @@ export function Sweep() {
         }
 
         if (nextPlan.quotes.length > 0) {
-          lastPreviewedKeyRef.current = previewKey;
+          const quoted = new Set(
+            nextPlan.quotes.map((quote) => quote.tokenAddress.toLowerCase()),
+          );
+          const quotedKey = forageBatch
+            .filter((token) => quoted.has(token.address.toLowerCase()))
+            .map((token) => `${token.address}:${token.balance}`)
+            .sort()
+            .join('|');
+          lastPreviewedKeyRef.current = quotedKey;
           previewRetryRef.current[previewKey] = 0;
+          previewRetryRef.current[quotedKey] = 0;
           setPlan(nextPlan);
+          setSelected((current) => {
+            const next = { ...current };
+            let changed = false;
+            for (const token of forageBatch) {
+              if (
+                current[token.address] &&
+                !quoted.has(token.address.toLowerCase())
+              ) {
+                next[token.address] = false;
+                changed = true;
+              }
+            }
+            return changed ? next : current;
+          });
         } else {
           const retries = previewRetryRef.current[previewKey] ?? 0;
           const transportSkip = nextPlan.skippedTokens.some((token) =>
@@ -624,14 +673,11 @@ export function Sweep() {
           nextPlan.skippedTokens,
           nextPlan.quotes.length,
         );
-        if (notice) {
+        if (notice && nextPlan.quotes.length === 0) {
           setSkipNotice(notice);
         } else if (nextPlan.quotes.length > 0) {
           setSkipNotice(null);
         }
-        // Keep the user's selection intact while preview builds / skips.
-        // Skipped tokens stay checked so the notice is actionable; forage
-        // still only ships quoted routes from the plan.
       } catch (buildError) {
         if (requestId !== previewRequestRef.current) {
           return;
@@ -1074,8 +1120,8 @@ export function Sweep() {
         <SectionHeader
           title={
             selectedTokens.length > 0
-              ? plan && plan.quotes.length !== selectedTokens.length && !isQuoting
-                ? `${plan.quotes.length} of ${selectedTokens.length} in this forage`
+              ? plan && !isQuoting
+                ? `${plan.quotes.length} in this forage`
                 : `${selectedTokens.length} selected`
               : 'Select tokens'
           }
@@ -1086,7 +1132,10 @@ export function Sweep() {
                   type="button"
                   onClick={() => {
                     void hapticSelection();
-                    const capped = tokens.slice(0, MAX_TOKENS_PER_SWEEP);
+                    const selectable = tokens.filter((token) =>
+                      Boolean(token.cachedRoute),
+                    );
+                    const capped = selectable.slice(0, MAX_TOKENS_PER_SWEEP);
                     const allOn = capped.every((token) => selected[token.address]);
                     lastPreviewedKeyRef.current = '';
                     previewRetryRef.current = {};
@@ -1106,7 +1155,10 @@ export function Sweep() {
                   disabled={isSubmitting}
                   className="forager-text-action disabled:opacity-40"
                 >
-                  {tokens.slice(0, MAX_TOKENS_PER_SWEEP).every((token) => selected[token.address])
+                  {tokens
+                    .filter((token) => Boolean(token.cachedRoute))
+                    .slice(0, MAX_TOKENS_PER_SWEEP)
+                    .every((token) => selected[token.address])
                     ? 'Clear'
                     : 'Select all'}
                 </button>
@@ -1314,11 +1366,7 @@ export function Sweep() {
               ) : plan ? (
                 <>
               <p className="mt-3 text-[15px] leading-snug text-forager-text-muted">
-                Swapping {plan.quotes.length}
-                {forageBatch.length !== plan.quotes.length
-                  ? ` of ${forageBatch.length} selected`
-                  : ''}{' '}
-                leftover token
+                Swapping {plan.quotes.length} leftover token
                 {plan.quotes.length === 1 ? '' : 's'} to WLD
               </p>
               <div className="mt-4 flex flex-wrap items-baseline gap-x-1.5">
@@ -1335,19 +1383,6 @@ export function Sweep() {
                   </span>
                 ) : null}
               </div>
-              {plan.skippedTokens.length > 0 && plan.quotes.length > 0 ? (
-                <p className="forager-subtitle mt-3 text-[15px] leading-snug">
-                  {formatTokenList(
-                    plan.skippedTokens.map((token) => token.symbol || 'token'),
-                  )}{' '}
-                  {plan.skippedTokens.length === 1 ? 'is' : 'are'} out of this
-                  batch
-                  {plan.skippedTokens[0]?.reason
-                    ? ` — ${plan.skippedTokens[0].reason}`
-                    : ''}
-                  {plan.skippedTokens.length > 1 ? '.' : '.'}
-                </p>
-              ) : null}
                 </>
               ) : null}
             </div>
@@ -1388,7 +1423,6 @@ export function Sweep() {
         ) : null}
 
         {growthStep === 'idle' ? (
-          <>
           <LiveFeedback
             label={{
               failed: failureLabel,
@@ -1419,14 +1453,6 @@ export function Sweep() {
               {forageButtonLabel}
             </ForagerButton>
           </LiveFeedback>
-          {canForage ||
-          submitPhase === 'simulating' ||
-          submitPhase === 'confirming' ? (
-            <p className="mt-2 text-center text-[12px] text-forager-text-muted">
-              Includes {PLATFORM_FEE_LABEL} platform fee
-            </p>
-          ) : null}
-          </>
         ) : null}
       </div>
     </div>

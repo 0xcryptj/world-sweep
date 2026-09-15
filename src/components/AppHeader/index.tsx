@@ -1,3 +1,6 @@
+'use client';
+
+import { BaseScrambleHeadline } from '@/components/brand/BaseScrambleHeadline';
 import { WldBalanceChip } from '@/components/WldBalanceChip';
 import { APP_NAME } from '@/lib/branding';
 import { Marble } from '@worldcoin/mini-apps-ui-kit-react';
@@ -20,7 +23,11 @@ export function AppHeader({
   return (
     <div className="flex items-center justify-between gap-3">
       <div className="min-w-0">
-        <h1 className="forager-display-lg">{title}</h1>
+        <BaseScrambleHeadline
+          as="h1"
+          text={title}
+          className="forager-display-lg forager-wordmark"
+        />
         {subtitle ? (
           <p className="forager-support-fade mt-2 text-[15px] leading-snug text-forager-text-muted">
             {subtitle}

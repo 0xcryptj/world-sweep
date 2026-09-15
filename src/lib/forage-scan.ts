@@ -410,12 +410,10 @@ export async function scanWalletForForage(
       continue;
     }
     if (isValuedHolding(token)) {
-      // Keep Dex-valued bags forageable without a cached route. Preview/build
-      // will quote Uniswap V3 again instead of dumping them as "no route".
-      swappable.push({
-        ...token,
-        cachedRoute: null,
-      });
+      // Dex-valued bags stay visible as "still checking" — never "no Uniswap
+      // route", and never selectable until a live quote exists so preview
+      // counts match the built transaction.
+      excluded.push(toExclusion(token, 'scan_deferred'));
       portalQueue.push({ address: token.address, symbol: token.symbol });
       continue;
     }
@@ -437,10 +435,7 @@ export async function scanWalletForForage(
     if (!isValuedHolding(token)) {
       continue;
     }
-    swappable.push({
-      ...token,
-      cachedRoute: null,
-    });
+    excluded.push(toExclusion(token, 'scan_deferred'));
     portalQueue.push({ address: token.address, symbol: token.symbol });
   }
 

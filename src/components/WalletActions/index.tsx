@@ -6,7 +6,6 @@ import { TokenIcon } from '@/components/Sweep/TokenIcon';
 import { AnimatedWld } from '@/components/Sweep/AnimatedWld';
 import { apiPath } from '@/lib/base-path';
 import {
-  PLATFORM_FEE_LABEL,
   WLD_ADDRESS,
   WORLD_CHAIN_ID,
 } from '@/lib/constants';
@@ -458,11 +457,6 @@ export function WalletActions({
                             ? 'Swap in World App'
                             : 'Preview swap'}
                       </ForagerButton>
-                      {swapPlan ? (
-                        <p className="text-center text-[12px] text-forager-text-muted">
-                          Includes {PLATFORM_FEE_LABEL} platform fee
-                        </p>
-                      ) : null}
                     </>
                   )}
                 </div>
