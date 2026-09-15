@@ -346,7 +346,7 @@ export async function buildSweepPlan({
           skip: {
             address: token.address,
             symbol: token.symbol,
-            reason: 'No Uniswap V3 liquidity route to WLD',
+            reason: 'Unable to find route',
           },
         };
       }

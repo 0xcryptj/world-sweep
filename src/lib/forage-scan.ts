@@ -60,19 +60,19 @@ const MAX_LIQUIDITY_SCAN_CANDIDATES = {
 } as const;
 
 const DEFAULT_SCAN_BUDGET_MS = {
-  fast: process.env.VERCEL === '1' ? 8_000 : 12_000,
-  full: process.env.VERCEL === '1' ? 28_000 : 40_000,
+  fast: process.env.VERCEL === '1' ? 6_000 : 8_000,
+  full: process.env.VERCEL === '1' ? 14_000 : 18_000,
 } as const;
 
 const PER_TOKEN_QUOTE_MS = {
-  fast: 2_200,
-  full: 3_200,
+  fast: 1_800,
+  full: 2_400,
 } as const;
 
 function scanExclusionLabel(reason: ScanExclusionReason): string {
   switch (reason) {
     case 'no_liquidity':
-      return 'No Uniswap route to WLD';
+      return 'Unable to find route';
     case 'not_allowlisted':
     case 'allowlist_pending':
       return 'Verified — waiting on World App allowlist';
@@ -231,17 +231,18 @@ async function quoteTokenLiquidity(
   }
 
   void mode;
-  // Match preview/build: retry flakes. Fast used to skip retries and drop real bags.
   const route = await quoteRouteToWld(token, {
-    skipRetry: false,
+    firstSuccess: true,
+    skipRetry: true,
+    callTimeoutMs: mode === 'fast' ? 700 : 800,
   });
   if (!route) {
-    // Dex/USD-valued bags are not "no Uniswap route" — the quoter missed or
-    // timed out. Keep them selectable and quote again at preview/build.
-    return {
-      route: null,
-      reason: isValuedHolding(token) ? 'scan_deferred' : 'no_liquidity',
-    };
+    // Fast pass can still defer valued bags for the full scan. After that,
+    // a miss is a miss — don't leave the row on "still checking".
+    if (mode === 'fast' && isValuedHolding(token)) {
+      return { route: null, reason: 'scan_deferred' };
+    }
+    return { route: null, reason: 'no_liquidity' };
   }
 
   const minWldOut = applySlippage(route.amountOut, SLIPPAGE_BPS);
@@ -363,7 +364,9 @@ export async function scanWalletForForage(
         return {
           token,
           route: null as RouteQuote | null,
-          reason: 'scan_deferred' as LiquidityExclusionReason,
+          reason: (
+            mode === 'fast' ? 'scan_deferred' : 'no_liquidity'
+          ) as LiquidityExclusionReason,
         };
       }
 
@@ -381,13 +384,17 @@ export async function scanWalletForForage(
             error instanceof Error ? error.message : String(error),
           );
         console.warn(
-          `[forage-scan] ${transport ? 'deferring' : 'skipping'} ${token.symbol} after quote timeout/error`,
+          `[forage-scan] ${mode === 'fast' && transport ? 'deferring' : 'skipping'} ${token.symbol} after quote timeout/error`,
           error instanceof Error ? error.message : error,
         );
         return {
           token,
           route: null as RouteQuote | null,
-          reason: 'scan_deferred' as LiquidityExclusionReason,
+          reason: (
+            mode === 'fast' && (transport || isValuedHolding(token))
+              ? 'scan_deferred'
+              : 'no_liquidity'
+          ) as LiquidityExclusionReason,
         };
       }
     },
@@ -413,15 +420,11 @@ export async function scanWalletForForage(
       excluded.push(toExclusion(token, 'output_too_small'));
       continue;
     }
-    if (isValuedHolding(token)) {
-      // Dex-valued bags stay visible as "still checking" — never "no Uniswap
-      // route", and never selectable until a live quote exists so preview
-      // counts match the built transaction.
-      excluded.push(toExclusion(token, 'scan_deferred'));
-      portalQueue.push({ address: token.address, symbol: token.symbol });
-      continue;
-    }
     if (reason === 'scan_deferred') {
+      excluded.push(toExclusion(token, 'scan_deferred'));
+      if (isValuedHolding(token)) {
+        portalQueue.push({ address: token.address, symbol: token.symbol });
+      }
       continue;
     }
     if (reason) {
@@ -436,11 +439,12 @@ export async function scanWalletForForage(
     if (scannedAddresses.has(token.address.toLowerCase())) {
       continue;
     }
-    if (!isValuedHolding(token)) {
-      continue;
+    const leftoverReason: LiquidityExclusionReason =
+      mode === 'fast' ? 'scan_deferred' : 'no_liquidity';
+    excluded.push(toExclusion(token, leftoverReason));
+    if (leftoverReason === 'scan_deferred') {
+      portalQueue.push({ address: token.address, symbol: token.symbol });
     }
-    excluded.push(toExclusion(token, 'scan_deferred'));
-    portalQueue.push({ address: token.address, symbol: token.symbol });
   }
 
   if (budgetExhausted) {

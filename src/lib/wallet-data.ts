@@ -47,12 +47,12 @@ const WLD_STALE_MS = 60_000;
 const HOLDINGS_TIMEOUT_MS = 10_000;
 const WLD_TIMEOUT_MS = 4_000;
 const SCAN_TIMEOUT_MS = {
-  fast: 16_000,
-  full: 48_000,
+  fast: 12_000,
+  full: 22_000,
 } as const;
 const SCAN_BUDGET_MS = {
-  fast: 12_000,
-  full: 40_000,
+  fast: 8_000,
+  full: 18_000,
 } as const;
 
 const SCAN_HIT_TTL_MS = {

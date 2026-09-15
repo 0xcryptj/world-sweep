@@ -172,6 +172,7 @@ function isSoftQuoteFailure(message: string): boolean {
     /Failed to build sweep/i.test(message) ||
     /Quoted output too small/i.test(message) ||
     /No Uniswap V3 liquidity/i.test(message) ||
+    /Unable to find route/i.test(message) ||
     /Quote RPC/i.test(message) ||
     /Quote unavailable/i.test(message) ||
     /Swap simulation failed/i.test(message) ||
@@ -285,7 +286,7 @@ export function Sweep() {
       return "Can't forage";
     }
     if (nonForagableTokens.every((token) => token.reason === 'no_liquidity')) {
-      return 'No WLD route';
+      return 'Unable to find route';
     }
     if (nonForagableTokens.every((token) => token.reason === 'output_too_small')) {
       return 'Too little WLD out';
@@ -392,11 +393,20 @@ export function Sweep() {
       const stillChecking = incomingTokens.filter(
         (token) => !token.cachedRoute,
       );
+      const scanComplete = payload.mode === 'full';
       const excludedByAddress = new Map<string, ExcludedToken>();
       for (const token of (payload.excluded ?? []).filter(
         (item) => !isRecentlyForaged(item.address),
       )) {
-        excludedByAddress.set(token.address.toLowerCase(), token);
+        const settled =
+          scanComplete && token.reason === 'scan_deferred'
+            ? {
+                ...token,
+                reason: 'no_liquidity' as const,
+                reasonLabel: 'Unable to find route',
+              }
+            : token;
+        excludedByAddress.set(token.address.toLowerCase(), settled);
       }
       for (const token of stillChecking) {
         const key = token.address.toLowerCase();
@@ -413,8 +423,10 @@ export function Sweep() {
           logoUrl: token.logoUrl,
           priceUsd: token.priceUsd,
           priceChange24h: token.priceChange24h,
-          reason: 'scan_deferred',
-          reasonLabel: 'Still checking WLD route…',
+          reason: scanComplete ? 'no_liquidity' : 'scan_deferred',
+          reasonLabel: scanComplete
+            ? 'Unable to find route'
+            : 'Still checking WLD route…',
         });
       }
       const nextExcluded = [...excludedByAddress.values()];
@@ -490,7 +502,7 @@ export function Sweep() {
       const response = await fetchWithTimeout(
         apiPath(`/tokens?${query.toString()}`),
         {},
-        mode === 'fast' ? 12_000 : 55_000,
+        mode === 'fast' ? 12_000 : 28_000,
       );
       const payload = (await response.json()) as {
         tokens?: WalletToken[];
@@ -1476,7 +1488,7 @@ export function Sweep() {
                     : pendingVerifiedTokens.length > 0
                       ? 'These tokens have real WLD liquidity. Reopen World App in a minute so Forager can include them.'
                     : checkingTokens.length > 0
-                      ? 'Routes are still quoting. Pull to rescan in a few seconds.'
+                      ? 'Routes are quoting. This should finish in a few seconds.'
                     : nonForagableTokens.length > 0
                       ? 'These bags have no usable WLD sell path. Clean leftovers to clear them out of this wallet.'
                       : 'No leftover tokens to forage right now. Check back after other mini apps.'}

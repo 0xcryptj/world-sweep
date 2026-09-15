@@ -49,6 +49,13 @@ export class QuoteTransportError extends Error {
 }
 
 const QUOTER_GAS = BigInt(2_000_000);
+const DEFAULT_QUOTER_TIMEOUT_MS = 5_000;
+const SCAN_QUOTER_TIMEOUT_MS = 750;
+const SCAN_DIRECT_FEES = [500, 3_000, 10_000] as const;
+const SCAN_MULTI_HOP_FEE_PAIRS: ReadonlyArray<readonly [number, number]> = [
+  [3_000, 3_000],
+  [10_000, 10_000],
+];
 
 const quoterSingleErrorAbi = [
   {
@@ -257,6 +264,7 @@ async function quoteExactInputSingle(
   tokenOut: Address,
   amountIn: bigint,
   fee: number,
+  timeoutMs = DEFAULT_QUOTER_TIMEOUT_MS,
 ): Promise<bigint | null> {
   const data = encodeFunctionData({
     abi: quoterV2Abi,
@@ -279,7 +287,7 @@ async function quoteExactInputSingle(
         data,
         gas: QUOTER_GAS,
       }),
-      5_000,
+      timeoutMs,
       'Quoter call timed out',
     );
 
@@ -307,6 +315,7 @@ async function quoteExactInputSingle(
 async function quoteExactInputPath(
   hops: RouteHop[],
   amountIn: bigint,
+  timeoutMs = DEFAULT_QUOTER_TIMEOUT_MS,
 ): Promise<bigint | null> {
   const data = encodeFunctionData({
     abi: quoterV2Abi,
@@ -321,7 +330,7 @@ async function quoteExactInputPath(
         data,
         gas: QUOTER_GAS,
       }),
-      5_000,
+      timeoutMs,
       'Quoter call timed out',
     );
 
@@ -344,33 +353,68 @@ async function quoteExactInputPath(
   }
 }
 
+type QuoteCallOptions = {
+  firstSuccess?: boolean;
+  timeoutMs?: number;
+};
+
 /**
- * Sequential fee-tier quotes to cut Alchemy CU.
- * - firstSuccess: stop at the first positive tier (fast scan).
- * - otherwise: walk all tiers and keep the best amountOut (full scan).
- * Never fire all three eth_calls in parallel — that spikes rate limits.
+ * Sequential fee-tier quotes to cut RPC load.
+ * firstSuccess: cheapest World Chain fees first, stop at the first hit.
+ * Build-sweep walks every tier for the best amountOut.
  */
 async function bestQuoteAcrossFees(
   tokenIn: Address,
   tokenOut: Address,
   amountIn: bigint,
-  options?: { firstSuccess?: boolean },
+  options?: QuoteCallOptions,
 ): Promise<{ fee: number; amountOut: bigint } | null> {
+  const timeoutMs = options?.timeoutMs ?? DEFAULT_QUOTER_TIMEOUT_MS;
+  const fees = options?.firstSuccess ? SCAN_DIRECT_FEES : FEE_TIERS;
   let best: { fee: number; amountOut: bigint } | null = null;
 
-  for (const fee of FEE_TIERS) {
+  if (options?.firstSuccess && fees.length >= 2) {
+    const primary = await Promise.allSettled([
+      quoteExactInputSingle(tokenIn, tokenOut, amountIn, fees[0], timeoutMs),
+      quoteExactInputSingle(tokenIn, tokenOut, amountIn, fees[1], timeoutMs),
+    ]);
+    let transportError: unknown;
+    for (const [index, result] of primary.entries()) {
+      if (result.status === 'fulfilled' && result.value && result.value > BigInt(0)) {
+        return { fee: fees[index], amountOut: result.value };
+      }
+      if (result.status === 'rejected' && isQuoterTransportError(result.reason)) {
+        transportError = result.reason;
+      }
+    }
+    for (const fee of fees.slice(2)) {
+      const amountOut = await quoteExactInputSingle(
+        tokenIn,
+        tokenOut,
+        amountIn,
+        fee,
+        timeoutMs,
+      );
+      if (amountOut && amountOut > BigInt(0)) {
+        return { fee, amountOut };
+      }
+    }
+    if (transportError && !best) {
+      throw transportError;
+    }
+    return null;
+  }
+
+  for (const fee of fees) {
     const amountOut = await quoteExactInputSingle(
       tokenIn,
       tokenOut,
       amountIn,
       fee,
+      timeoutMs,
     );
     if (!amountOut || amountOut <= BigInt(0)) {
       continue;
-    }
-
-    if (options?.firstSuccess) {
-      return { fee, amountOut };
     }
 
     if (!best || amountOut > best.amountOut) {
@@ -385,7 +429,7 @@ async function quoteHop(
   tokenIn: Address,
   tokenOut: Address,
   amountIn: bigint,
-  options?: { firstSuccess?: boolean },
+  options?: QuoteCallOptions,
 ): Promise<{ fee: number; amountOut: bigint } | null> {
   return bestQuoteAcrossFees(tokenIn, tokenOut, amountIn, options);
 }
@@ -407,18 +451,20 @@ async function quoteMultiHopRoute(
   intermediate: Address,
   intermediateLabel: string,
   symbol: string,
-  options?: { firstSuccess?: boolean },
+  options?: QuoteCallOptions,
 ): Promise<RouteQuote | null> {
-  // One quoter call per fee pair is cheaper and more accurate than quoting
-  // hop 1 then hop 2 independently (the second hop used a synthetic amount).
+  const timeoutMs = options?.timeoutMs ?? DEFAULT_QUOTER_TIMEOUT_MS;
+  const pairs = options?.firstSuccess
+    ? SCAN_MULTI_HOP_FEE_PAIRS
+    : MULTI_HOP_FEE_PAIRS;
   let best: RouteQuote | null = null;
 
-  for (const [feeIn, feeOut] of MULTI_HOP_FEE_PAIRS) {
+  for (const [feeIn, feeOut] of pairs) {
     const hops: RouteHop[] = [
       { tokenIn, tokenOut: intermediate, fee: feeIn },
       { tokenIn: intermediate, tokenOut: WLD_ADDRESS, fee: feeOut },
     ];
-    const amountOut = await quoteExactInputPath(hops, amountIn);
+    const amountOut = await quoteExactInputPath(hops, amountIn, timeoutMs);
     if (!amountOut || amountOut <= BigInt(0)) {
       continue;
     }
@@ -442,7 +488,11 @@ async function quoteMultiHopRoute(
     return best;
   }
 
-  // Fallback: independent hops if packed-path quoting reverts on this pool.
+  // Scan misses should fail closed — don't spend another hop walk on junk.
+  if (options?.firstSuccess) {
+    return null;
+  }
+
   const firstHop = await quoteHop(tokenIn, intermediate, amountIn, options);
   if (!firstHop) {
     return null;
@@ -477,12 +527,22 @@ async function quoteRouteToWldOnce(
   token: WalletToken,
   tokenIn: Address,
   amountIn: bigint,
-  options?: { directOnly?: boolean; firstSuccess?: boolean },
+  options?: {
+    directOnly?: boolean;
+    firstSuccess?: boolean;
+    timeoutMs?: number;
+  },
 ): Promise<RouteQuote | null> {
-  // Prefer direct WLD, then WETH/USDC bridges — best amount wins.
-  const directHop = await bestQuoteAcrossFees(tokenIn, WLD_ADDRESS, amountIn, {
+  const hopOpts: QuoteCallOptions = {
     firstSuccess: options?.firstSuccess,
-  });
+    timeoutMs: options?.timeoutMs,
+  };
+  const directHop = await bestQuoteAcrossFees(
+    tokenIn,
+    WLD_ADDRESS,
+    amountIn,
+    hopOpts,
+  );
   if (directHop && directHop.amountOut > BigInt(0)) {
     return {
       hops: [{ tokenIn, tokenOut: WLD_ADDRESS, fee: directHop.fee }],
@@ -495,13 +555,11 @@ async function quoteRouteToWldOnce(
     return null;
   }
 
-  const hopOpts = { firstSuccess: options?.firstSuccess };
   const bridges: Array<{ intermediate: Address; label: string }> = [
     { intermediate: WETH_ADDRESS, label: 'WETH' },
     { intermediate: USDC_ADDRESS, label: 'USDC' },
   ];
 
-  // Fast scan: try bridges sequentially and stop at the first hit.
   if (options?.firstSuccess) {
     for (const bridge of bridges) {
       const route = await quoteMultiHopRoute(
@@ -519,7 +577,6 @@ async function quoteRouteToWldOnce(
     return null;
   }
 
-  // Full scan: compare both bridges for best amountOut (still sequential).
   let best: RouteQuote | null = null;
   for (const bridge of bridges) {
     const route = await quoteMultiHopRoute(
@@ -544,10 +601,12 @@ async function quoteRouteToWldOnce(
 export type QuoteRouteOptions = {
   /** Skip WETH/USDC bridges — used for the instant Home pass. */
   directOnly?: boolean;
-  /** Skip the 180ms silent retry. */
+  /** Skip the silent retry on RPC flakes. */
   skipRetry?: boolean;
-  /** Return first positive fee tier (fast scan). */
+  /** Return first positive fee tier (scan / existence checks). */
   firstSuccess?: boolean;
+  /** Per quoter eth_call timeout. Scan uses a short budget so misses fail fast. */
+  callTimeoutMs?: number;
 };
 
 export async function quoteRouteToWld(
@@ -590,11 +649,15 @@ export async function quoteRouteToWld(
     // instead of being misreported as no_liquidity.
     let route: RouteQuote | null = null;
     let transportFailed = false;
+    const onceOptions = {
+      directOnly: options?.directOnly,
+      firstSuccess: options?.firstSuccess,
+      timeoutMs:
+        options?.callTimeoutMs ??
+        (options?.firstSuccess ? SCAN_QUOTER_TIMEOUT_MS : DEFAULT_QUOTER_TIMEOUT_MS),
+    };
     try {
-      route = await quoteRouteToWldOnce(token, tokenIn, amountIn, {
-        directOnly: options?.directOnly,
-        firstSuccess: options?.firstSuccess,
-      });
+      route = await quoteRouteToWldOnce(token, tokenIn, amountIn, onceOptions);
     } catch (error) {
       if (!isQuoterTransportError(error)) {
         throw error;
@@ -604,14 +667,11 @@ export async function quoteRouteToWld(
     }
 
     // Only retry on transport failures — not when all fee tiers / bridges
-    // returned a definitive no-pool null (that just doubles Alchemy CU).
+    // returned a definitive no-pool null (that just doubles RPC).
     if (!route && transportFailed && !options?.skipRetry) {
       try {
         await new Promise((resolve) => setTimeout(resolve, 280));
-        route = await quoteRouteToWldOnce(token, tokenIn, amountIn, {
-          directOnly: options?.directOnly,
-          firstSuccess: options?.firstSuccess,
-        });
+        route = await quoteRouteToWldOnce(token, tokenIn, amountIn, onceOptions);
         transportFailed = false;
       } catch (error) {
         if (!isQuoterTransportError(error)) {

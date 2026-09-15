@@ -244,7 +244,7 @@ export function WalletActions({
       if (payload.quotes.length === 0) {
         throw new Error(
           payload.skippedTokens[0]?.reason ??
-            'No Uniswap route to WLD for this token right now.',
+            'Unable to find route for this token right now.',
         );
       }
       setSwapPlan(payload);

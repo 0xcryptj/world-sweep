@@ -160,6 +160,10 @@ export async function buildCleanupPlan({
           decimals: 18,
           balance: amount.toString(),
           balanceFormatted: '0',
+        }, {
+          firstSuccess: true,
+          skipRetry: true,
+          callTimeoutMs: 800,
         });
         if (route) {
           const minWldOut = applySlippage(route.amountOut, SLIPPAGE_BPS);
