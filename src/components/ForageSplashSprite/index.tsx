@@ -41,7 +41,6 @@ export function ForageSplashSprite({
       }
       aria-hidden
     >
-      {variant === 'hero' ? <span className="forager-forage-rays" /> : null}
       <span className="forager-forage-frame">
         <span
           className="forager-forage-sheet"

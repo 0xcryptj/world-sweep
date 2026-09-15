@@ -80,6 +80,18 @@ export function getTokenIconSources(
     sources.push(withBasePath(localPath));
   }
 
+  if (normalizedLogo) {
+    sources.push(normalizedLogo);
+  }
+
+  sources.push(getDexScreenerTokenIconUrl(address));
+
+  const override =
+    TOKEN_ICON_OVERRIDES[address] ?? TOKEN_ICON_OVERRIDES[symbol];
+  if (override) {
+    sources.push(override);
+  }
+
   const query = new URLSearchParams({ address });
   if (token.symbol) {
     query.set('symbol', token.symbol);
@@ -88,18 +100,6 @@ export function getTokenIconSources(
     query.set('logoUrl', normalizedLogo);
   }
   sources.push(apiPath(`/token-icon?${query.toString()}`));
-
-  const override =
-    TOKEN_ICON_OVERRIDES[address] ?? TOKEN_ICON_OVERRIDES[symbol];
-  if (override) {
-    sources.push(override);
-  }
-
-  if (normalizedLogo) {
-    sources.push(normalizedLogo);
-  }
-
-  sources.push(getDexScreenerTokenIconUrl(address));
 
   return [...new Set(sources)];
 }

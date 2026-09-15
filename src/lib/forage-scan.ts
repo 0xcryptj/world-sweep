@@ -4,6 +4,7 @@ import {
 } from './allowlist';
 import { mapPool } from './async-pool';
 import { MIN_WLD_OUT_WEI, SLIPPAGE_BPS } from './constants';
+import { tokenUsdValue } from './format-token-value';
 import { withTimeout } from './fetch-with-timeout';
 import { queuePortalAllowlistSync } from './portal-sync';
 import {
@@ -167,6 +168,11 @@ function compareScanCandidates(a: WalletToken, b: WalletToken): number {
   }
 
   return a.symbol.localeCompare(b.symbol);
+}
+
+function hasSpendableUsd(token: WalletToken): boolean {
+  const usd = tokenUsdValue(token);
+  return usd != null && usd >= 0.01;
 }
 
 async function quoteTokenLiquidity(
@@ -348,12 +354,27 @@ export async function scanWalletForForage(
   const portalQueue: Array<{ address: string; symbol: string }> = [];
 
   for (const { token, route, reason } of quoteResults) {
-    // Hide deferred/timeout rows from the client — only show real outcomes.
-    if (reason === 'scan_deferred') {
+    const keepValued =
+      hasSpendableUsd(token) &&
+      isPermit2Allowlisted(token.address) &&
+      (reason === 'scan_deferred' ||
+        reason === 'no_liquidity' ||
+        reason === 'output_too_small' ||
+        !route);
+
+    if (reason === 'scan_deferred' && !keepValued) {
       continue;
     }
     if (reason === 'allowlist_pending' && route) {
       excluded.push(toExclusion(token, 'allowlist_pending'));
+      portalQueue.push({ address: token.address, symbol: token.symbol });
+      continue;
+    }
+    if (keepValued) {
+      swappable.push({
+        ...token,
+        cachedRoute: null,
+      });
       portalQueue.push({ address: token.address, symbol: token.symbol });
       continue;
     }

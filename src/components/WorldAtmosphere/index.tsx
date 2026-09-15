@@ -1,12 +1,11 @@
 'use client';
 
+import { AsciiArt } from '@/components/ui/trippin-spiral';
 import { usePathname } from 'next/navigation';
 
 export function WorldAtmosphere() {
   const pathname = usePathname();
-  if (pathname === '/enter' || pathname === '/') {
-    return null;
-  }
+  const onEnter = pathname === '/enter' || pathname === '/';
 
   return (
     <div
@@ -14,6 +13,11 @@ export function WorldAtmosphere() {
       aria-hidden
     >
       <div className="world-atmosphere__gradient absolute inset-0" />
+      {!onEnter ? (
+        <div className="forager-enter-ascii forager-atmosphere-ascii">
+          <AsciiArt />
+        </div>
+      ) : null}
     </div>
   );
 }

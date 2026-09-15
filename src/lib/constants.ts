@@ -72,7 +72,7 @@ export const FEE_TIERS = [500, 3_000, 10_000, 100] as const;
 
 export const SLIPPAGE_BPS = 300; // 3%
 
-export const MAX_TOKENS_PER_SWEEP = 4;
+export const MAX_TOKENS_PER_SWEEP = 8;
 
 /**
  * Minimum quoted WLD output (wei) for a swap to count as forageable.

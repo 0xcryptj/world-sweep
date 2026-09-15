@@ -298,7 +298,7 @@ export async function buildSweepPlan({
 
   const prepared = await mapPool(
     candidates.slice(0, MAX_TOKENS_PER_SWEEP + 4),
-    4,
+    8,
     async (token): Promise<PreparedCandidate | { skip: BuildSweepResponse['skippedTokens'][number] } | null> => {
       if (!isAddress(token.address) || !/^\d+$/.test(String(token.balance))) {
         return {

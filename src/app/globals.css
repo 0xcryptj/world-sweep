@@ -1552,11 +1552,19 @@ vercel-live-feedback,
 }
 
 .forager-nonforage-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.6rem;
+  min-height: 1.85rem;
+  padding: 0.4rem 0.9rem;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
   background: rgb(255 255 255 / 8%);
   border: none;
   border-radius: 9999px;
   color: var(--foreground);
-  min-width: 1.75rem;
   text-align: center;
   letter-spacing: 0.02em;
 }
@@ -1702,7 +1710,7 @@ vercel-live-feedback,
   z-index: 0;
   overflow: hidden;
   pointer-events: none;
-  opacity: 0.2;
+  opacity: 0.34;
   mix-blend-mode: screen;
   /* Rim fade only — art still reaches all four edges; fade blends, does not shrink. */
   -webkit-mask-image:
@@ -1713,6 +1721,10 @@ vercel-live-feedback,
     linear-gradient(to right, transparent 0%, #000 5%, #000 95%, transparent 100%),
     linear-gradient(to bottom, transparent 0%, #000 4%, #000 96%, transparent 100%);
   mask-composite: intersect;
+}
+
+.forager-atmosphere-ascii {
+  opacity: 0.16;
 }
 
 .forager-enter-ascii::after {
@@ -1865,7 +1877,7 @@ vercel-live-feedback,
   z-index: 1;
   display: grid;
   place-items: center;
-  width: min(22rem, 86vw);
+  width: min(28rem, 94vw);
   flex-shrink: 0;
   pointer-events: none;
   overflow: visible;

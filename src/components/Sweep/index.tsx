@@ -3,7 +3,6 @@
 import { TokenListRow } from '@/components/TokenListRow';
 import { AnimatedWld } from '@/components/Sweep/AnimatedWld';
 import { ErrorBanner } from '@/components/Sweep/ErrorBanner';
-import { CubeLoader } from '@/components/CubeLoader';
 import { ForagerActivity, TokenListSkeleton } from '@/components/ForagerActivity';
 import { CleanWalletArt } from '@/components/CleanWalletArt';
 import { IosIcon } from '@/components/IosIcon';
@@ -62,15 +61,15 @@ type ExcludedToken = {
 };
 
 const SCAN_ACTIVITY_MESSAGES = [
-  'Checking allowlisted tokens for WLD routes...',
-  'Scanning leftover tokens in your wallet...',
-  'Filtering leftover tokens with real liquidity...',
+  'Please wait — scanning leftover tokens…',
+  'Checking WLD routes for your bag…',
+  'Building a bundled forage transaction…',
 ];
 
 const PREVIEW_ACTIVITY_MESSAGES = [
-  'Quoting selected tokens to WLD...',
-  'Building a single forage preview...',
-  'Locking the route and estimated output...',
+  'Please wait — quoting selected tokens…',
+  'Building a bundled transaction to WLD…',
+  'Locking routes and estimated output…',
 ];
 
 /**
@@ -83,9 +82,9 @@ const SCAN_MIN_HOLD_MS = 280;
 const SCAN_COMPLETE_SETTLE_MS = 120;
 
 const BUILD_ACTIVITY_MESSAGES = [
-  'Preparing your swap batch...',
-  'Encoding router approvals...',
-  'Calculating minimum WLD output...',
+  'Please wait — packing approvals and swaps…',
+  'Encoding the bundled forage transaction…',
+  'Calculating minimum WLD output…',
 ];
 
 const SIMULATE_ACTIVITY_MESSAGES = [
@@ -1090,12 +1089,7 @@ export function Sweep() {
           }
           action={
             <div className="flex items-center gap-3">
-              {isScanning || isQuoting ? (
-                <span className="forager-subtitle flex shrink-0 items-center gap-1.5 text-[13px]">
-                  <CubeLoader size="xs" />
-                  {isScanning ? 'Scanning' : 'Quoting'}
-                </span>
-              ) : tokens.length > 0 ? (
+              {tokens.length > 0 && !isScanning && !isQuoting ? (
                 <button
                   type="button"
                   onClick={() => {
@@ -1212,7 +1206,7 @@ export function Sweep() {
           {pendingVerifiedTokens.length > 0 ? (
             <div className="forager-section">
               <div className="flex items-center gap-3 px-1 pb-2">
-                <span className="forager-nonforage-count forager-numeric shrink-0 rounded-full px-2 py-0.5 text-[13px]">
+                <span className="forager-nonforage-count forager-numeric shrink-0">
                   {pendingVerifiedTokens.length}
                 </span>
                 <span className="min-w-0 flex-1 text-[15px] text-forager-text-muted">
@@ -1247,7 +1241,7 @@ export function Sweep() {
                 }`}
                 aria-expanded={showExcluded}
               >
-                <span className="forager-nonforage-count forager-numeric shrink-0 rounded-full px-2 py-0.5 text-[13px]">
+                <span className="forager-nonforage-count forager-numeric shrink-0">
                   {nonForagableTokens.length}
                 </span>
                 <span className="min-w-0 flex-1 text-[15px] text-forager-text-muted">
@@ -1285,12 +1279,9 @@ export function Sweep() {
                 <p className="forager-title text-[17px]">Preview</p>
               </div>
               {isQuoting ? (
-                <div className="mt-5 flex flex-col items-center gap-4 py-2">
-                  <CubeLoader size="md" />
-                  <p className="forager-subtitle text-center text-[13px]">
-                    Building preview
-                  </p>
-                </div>
+                <p className="forager-subtitle mt-4 text-[15px] leading-snug">
+                  Please wait — building a bundled transaction…
+                </p>
               ) : plan ? (
                 <>
               <p className="mt-3 text-[15px] leading-snug text-forager-text-muted">
